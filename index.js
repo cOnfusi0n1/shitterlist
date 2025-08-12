@@ -304,6 +304,13 @@ class Settings {
     autoUpdaterEnabled = true;
 
     @SwitchProperty({
+        name: "Automatisch installieren",
+        description: "Falls deaktiviert: nur Hinweis im Chat, manuell aktualisieren",
+        category: "Updater"
+    })
+    autoInstallUpdates = true;
+
+    @SwitchProperty({
         name: "Beim Start prüfen",
         description: "Prüft beim Start auf Updates",
         category: "Updater"
@@ -1464,10 +1471,19 @@ function startAutoUpdater() {
 
         checkForUpdate((hasUpdate) => {
             if (hasUpdate) {
-                if (settings.autoUpdaterEnabled) {
+                if (settings.autoUpdaterEnabled && settings.autoInstallUpdates) {
                     performSelfUpdate(true);
                 } else {
-                    slLog("general", "Update verfügbar – verwende /sl update-now", "info");
+                    // Immer Hinweis ausgeben
+                    slLog("general", "Update verfügbar – klicke zum Installieren", "info");
+                    try {
+                        const msg = new Message(
+                            new TextComponent("&a[Jetzt aktualisieren]")
+                                .setHover("show_text", "&aKlicken um das Update zu installieren")
+                                .setClick("run_command", "/sl update-now")
+                        );
+                        ChatLib.chat(msg);
+                    } catch(_) {}
                 }
             } else if (settings.debugMode) {
                 ChatLib.chat(formatMessage("Updater: kein Update gefunden", "info"));
@@ -1888,6 +1904,7 @@ register("command", (...args) => {
                 ChatLib.chat("&7Verfügbare Settings:");
                 ChatLib.chat("&7• enabled, debugMode, showJoinWarnings, partyWarnings");
                 ChatLib.chat("&7• dungeonWarnings, showTitleWarning, warningSound, autoPartyKick");
+                ChatLib.chat("&7• autoUpdaterEnabled, autoinstallupdates, checkUpdatesOnLoad");
                 ChatLib.chat("&7• api aktiviert, autoSync, downloadFromAPI, uploadToAPI");
                 return;
             }
@@ -1938,6 +1955,11 @@ register("command", (...args) => {
                 case "api":
                     settings.enableAPI = !settings.enableAPI;
                     ChatLib.chat("&a[Shitterlist] &fAPI aktiviert: " + (settings.enableAPI ? "&aJa" : "&cNein"));
+                    break;
+                case "autoinstallupdates":
+                case "autoinstall":
+                    settings.autoInstallUpdates = !settings.autoInstallUpdates;
+                    ChatLib.chat("&a[Shitterlist] &fAutomatisch installieren: " + (settings.autoInstallUpdates ? "&aJa" : "&cNein"));
                     break;
                 // apionly Toggle entfernt – permanenter API-Only Modus
                 default:
