@@ -1480,8 +1480,14 @@ function checkForUpdate(callback) {
         const diffVersion = compareVersions(remoteVersion, localVersion) > 0;
         // Sicherheitslogik: Bevorzuge Versionsvergleich; reine Datei-Diffs ohne Versionssprung nur im Debug anzeigen
         const hasUpdate = diffVersion || (diffFile && remoteVersion === localVersion && settings.debugMode);
+        // Chat-Meldung mit Versionen (immer wenn Debug oder Update verfügbar)
+        if (hasUpdate) {
+            slLog("general", `Update gefunden: &c${localVersion || 'unbekannt'} &7→ &a${remoteVersion || 'unbekannt'}`, "info");
+        } else if (settings.debugMode) {
+            slLog("general", `Aktuell: &a${localVersion || 'unbekannt'} &7| Remote: &a${remoteVersion || 'unbekannt'} (kein Update)`, "info");
+        }
         if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Updater: localV=${localVersion} remoteV=${remoteVersion} diffV=${diffVersion} diffFile=${diffFile} => update=${hasUpdate}`);
-        callback && callback(hasUpdate, remoteIndexContent, remoteMetaContent);
+        callback && callback(hasUpdate, remoteIndexContent, remoteMetaContent, localVersion, remoteVersion);
     };
 
     // Primärpfad abrufen
@@ -1511,9 +1517,9 @@ function checkForUpdate(callback) {
 }
 
 function performSelfUpdate(forceInstall, cb) {
-    checkForUpdate((hasUpdate, remoteIndexContent, remoteMetaContent) => {
+    checkForUpdate((hasUpdate, remoteIndexContent, remoteMetaContent, localV, remoteV) => {
         if (!forceInstall && !hasUpdate) {
-            slInfo("Kein Update verfügbar");
+            slInfo(`Kein Update verfügbar (Version &a${localV || 'unbekannt'}&7)`);
             return cb && cb(false);
         }
         if (!remoteIndexContent) {
@@ -1532,7 +1538,7 @@ function performSelfUpdate(forceInstall, cb) {
                     FileLib.write("Shitterlist", UPDATER_METADATA_FILE, remoteMetaContent);
                 }
             }
-            slSuccess("Update installiert. Lade neu...");
+            slSuccess(`Update installiert (&c${localV || 'alt'} &7→ &a${remoteV || 'neu'}) – lade neu...`);
             setTimeout(()=>ChatLib.command("ct load", true), 1000);
             cb && cb(true);
         } catch(e){
@@ -1573,7 +1579,7 @@ function startAutoUpdater() {
         const now = Date.now();
         if (now - updaterState.lastCheck < intervalMs) return;
         if (updaterState.checking) return;
-        if (settings.debugMode) ChatLib.chat(formatMessage("AutoUpdater Tick: starte Check", "info"));
+        if (settings.debugMode) ChatLib.chat(formatMessage("Suche Nach Updates...", "info"));
         checkForUpdate((hasUpdate) => {
             if (hasUpdate) {
                 if (settings.autoUpdaterEnabled && settings.autoInstallUpdates) {
@@ -1591,7 +1597,7 @@ function startAutoUpdater() {
                     } catch(_) {}
                 }
             } else if (settings.debugMode) {
-                ChatLib.chat(formatMessage("Updater: kein Update gefunden", "info"));
+                ChatLib.chat(formatMessage("Kein Update verfügbar!", "info"));
             }
         });
     }).setDelay(60); // Schritt alle ~3s (20t) * 60 = 60s
