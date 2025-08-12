@@ -1259,11 +1259,13 @@ function addShitterWithCategory(username, category, reason) {
 }
 
 // ===== Updater (Self-update) =====
-const UPDATER_BASE_URL = "https://raw.githubusercontent.com/cOnfusi0n1/Shitterlist/main"; // updated repo (capital S)
-const UPDATER_TARGET_FILE = "index.js";
-const UPDATER_REMOTE_PATH = "/Shitterlist/index.js";
-const UPDATER_METADATA_FILE = "metadata.json";
-const UPDATER_METADATA_REMOTE_PATH = "/Shitterlist/metadata.json";
+// Hinweis: Im GitHub-Repo liegen die Dateien im Root, NICHT in einem Unterordner "Shitterlist".
+// Die bisherigen Pfade /Shitterlist/index.js führten zu 404 und verhinderten Updates.
+const UPDATER_BASE_URL = "https://raw.githubusercontent.com/cOnfusi0n1/Shitterlist/main"; // Raw Root des Repos
+const UPDATER_TARGET_FILE = "index.js";              // Lokale Datei innerhalb des Module-Ordners
+const UPDATER_REMOTE_PATH = "/index.js";             // Remote Pfad im Repo (Root)
+const UPDATER_METADATA_FILE = "metadata.json";        // Lokale Metadata
+const UPDATER_METADATA_REMOTE_PATH = "/metadata.json"; // Remote Pfad im Repo (Root)
 
 let updaterState = {
     lastCheck: 0,
@@ -1320,37 +1322,58 @@ function compareVersions(a, b) {
 function checkForUpdate(callback) {
     if (updaterState.checking) { callback && callback(false); return; }
     updaterState.checking = true;
-    const remoteIndexUrl = UPDATER_BASE_URL + UPDATER_REMOTE_PATH;
-    const remoteMetaUrl  = UPDATER_BASE_URL + UPDATER_METADATA_REMOTE_PATH;
+    const remoteIndexUrlPrimary = UPDATER_BASE_URL + UPDATER_REMOTE_PATH;            // Erwartet /index.js
+    const remoteMetaUrlPrimary  = UPDATER_BASE_URL + UPDATER_METADATA_REMOTE_PATH;   // Erwartet /metadata.json
+    const legacyIndexUrl = UPDATER_BASE_URL + "/Shitterlist/index.js";             // Alter (falscher) Pfad – Fallback falls jemand Repo umstellt
+    const legacyMetaUrl  = UPDATER_BASE_URL + "/Shitterlist/metadata.json";
 
-    fetchRemoteText(remoteIndexUrl, (errIdx, remoteIndexContent) => {
-        if (errIdx || !remoteIndexContent) {
-            updaterState.checking = false;
-            updaterState.lastCheck = Date.now();
-            slWarn("Update-Check (index.js) fehlgeschlagen: " + (errIdx ? errIdx.message : "leer"));
+    const finish = (remoteIndexContent, remoteMetaContent, warnPrefix) => {
+        updaterState.checking = false;
+        updaterState.lastCheck = Date.now();
+        if (!remoteIndexContent) {
+            slWarn((warnPrefix||"Updater") + ": Remote index.js nicht abrufbar");
             return callback && callback(false, null, null);
         }
-        fetchRemoteText(remoteMetaUrl, (errMeta, remoteMetaContent) => {
-            updaterState.checking = false;
-            updaterState.lastCheck = Date.now();
-            if (errMeta || !remoteMetaContent) {
-                slWarn("Update-Check (metadata.json) fehlgeschlagen: " + (errMeta ? errMeta.message : "leer"));
-                // Fallback nur auf Datei-Diff
-                const localIndex = (FileLib.read("Shitterlist", UPDATER_TARGET_FILE) || "");
-                const hasUpdate = localIndex !== remoteIndexContent;
-                return callback && callback(hasUpdate, remoteIndexContent, null);
-            }
-            let remoteVersion = "";
-            try { remoteVersion = JSON.parse(remoteMetaContent).version || ""; } catch(_) {}
-            let localVersion = "";
-            try { localVersion = JSON.parse(FileLib.read("Shitterlist", UPDATER_METADATA_FILE) || "{}").version || ""; } catch(_) {}
-            const localIndex = (FileLib.read("Shitterlist", UPDATER_TARGET_FILE) || "");
-            const diffFile = localIndex !== remoteIndexContent;
-            const diffVersion = compareVersions(remoteVersion, localVersion) > 0;
-            const hasUpdate = diffFile || diffVersion;
-            if (settings.debugMode)
-                ChatLib.chat(`&7[DEBUG] Updater: version local=${localVersion} remote=${remoteVersion} diffV=${diffVersion} diffFile=${diffFile} => update=${hasUpdate}`);
-            callback && callback(hasUpdate, remoteIndexContent, remoteMetaContent);
+        let localIndex = (FileLib.read("Shitterlist", UPDATER_TARGET_FILE) || "");
+        if (!remoteMetaContent) {
+            // Nur Datei-Diff möglich
+            const hasUpdateFallback = localIndex !== remoteIndexContent;
+            return callback && callback(hasUpdateFallback, remoteIndexContent, null);
+        }
+        let remoteVersion = "";
+        let localVersion = "";
+        try { remoteVersion = JSON.parse(remoteMetaContent).version || ""; } catch(_) {}
+        try { localVersion = JSON.parse(FileLib.read("Shitterlist", UPDATER_METADATA_FILE) || "{}").version || ""; } catch(_) {}
+        const diffFile = localIndex !== remoteIndexContent;
+        const diffVersion = compareVersions(remoteVersion, localVersion) > 0;
+        // Sicherheitslogik: Bevorzuge Versionsvergleich; reine Datei-Diffs ohne Versionssprung nur im Debug anzeigen
+        const hasUpdate = diffVersion || (diffFile && remoteVersion === localVersion && settings.debugMode);
+        if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Updater: localV=${localVersion} remoteV=${remoteVersion} diffV=${diffVersion} diffFile=${diffFile} => update=${hasUpdate}`);
+        callback && callback(hasUpdate, remoteIndexContent, remoteMetaContent);
+    };
+
+    // Primärpfad abrufen
+    fetchRemoteText(remoteIndexUrlPrimary, (errIdx, idxContent) => {
+        if (errIdx || !idxContent) {
+            if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Updater Primärpfad fehlgeschlagen (${errIdx ? errIdx.message : 'leer'}), versuche Legacy-Pfad...`);
+            // Fallback Legacy
+            fetchRemoteText(legacyIndexUrl, (errLegacyIdx, legacyIdxContent) => {
+                if (errLegacyIdx || !legacyIdxContent) {
+                    updaterState.checking = false;
+                    updaterState.lastCheck = Date.now();
+                    slWarn("Update-Check fehlgeschlagen (alle Pfade)");
+                    return callback && callback(false, null, null);
+                }
+                // Legacy Meta
+                fetchRemoteText(legacyMetaUrl, (errLegacyMeta, legacyMetaContent) => {
+                    finish(legacyIdxContent, errLegacyMeta ? null : legacyMetaContent, "Updater(Fallback)");
+                });
+            });
+            return;
+        }
+        // Primäre Metadata
+        fetchRemoteText(remoteMetaUrlPrimary, (errMeta, metaContent) => {
+            finish(idxContent, errMeta ? null : metaContent, null);
         });
     });
 }
@@ -1366,9 +1389,16 @@ function performSelfUpdate(forceInstall, cb) {
             return cb && cb(false);
         }
         try {
-            FileLib.write("Shitterlist", UPDATER_TARGET_FILE, remoteIndexContent);
+            // Nur schreiben wenn sich Inhalt wirklich unterscheidet oder forceInstall aktiv ist
+            const current = FileLib.read("Shitterlist", UPDATER_TARGET_FILE) || "";
+            if (forceInstall || current !== remoteIndexContent) {
+                FileLib.write("Shitterlist", UPDATER_TARGET_FILE, remoteIndexContent);
+            }
             if (remoteMetaContent) {
-                FileLib.write("Shitterlist", UPDATER_METADATA_FILE, remoteMetaContent);
+                const curMeta = FileLib.read("Shitterlist", UPDATER_METADATA_FILE) || "";
+                if (forceInstall || curMeta !== remoteMetaContent) {
+                    FileLib.write("Shitterlist", UPDATER_METADATA_FILE, remoteMetaContent);
+                }
             }
             slSuccess("Update installiert. Lade neu...");
             setTimeout(()=>ChatLib.command("ct load", true), 1000);
