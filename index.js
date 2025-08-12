@@ -372,11 +372,39 @@ const autoKickSent = {}; // { playerNameLower: timestamp }
 // Kick-Nachricht + Kick ausführen
 function sendKickAnnouncement(playerName, reason) {
     const r = (reason && reason.trim()) ? reason.trim() : "Unknown";
-    enqueueCommand(`pc Kicking ${playerName} - Reason: ${r}`, "announce");
+    // ALT: ChatLib.command(`pc Kicking ${playerName} - Reason: ${r}`);
+    safeCommand(`pc Kicking ${playerName} - Reason: ${r}`);
 }
 function scheduleKick(playerName) {
-    enqueueCommand(`p kick ${playerName}`, "kick");
+    // ALT: setTimeout(() => ChatLib.command(`p kick ${playerName}`), 800);
+    // Mit Queue reicht direkte Einreihung; Delay kommt automatisch
+    safeCommand(`p kick ${playerName}`);
 }
+
+// === Neuer Abschnitt: Rate Limiter für Server-Commands ===
+const COMMAND_DELAY_MS = 1400; // Abstand zwischen gesendeten Befehlen (anpassen falls nötig)
+const commandQueue = [];
+let lastCommandSentAt = 0;
+
+function queueServerCommand(cmd) {
+    commandQueue.push(cmd);
+    if (settings && settings.debugMode) ChatLib.chat(`&7[DEBUG] (Queue) Eingereiht: /${cmd}`);
+}
+function safeCommand(cmd) {
+    // Nur Server-Kommandos ohne führenden Slash hineinlegen (ChatLib.command fügt Slash hinzu)
+    queueServerCommand(cmd);
+}
+
+// Verarbeite Queue (tick = 20x pro Sekunde)
+register("tick", () => {
+    if (commandQueue.length === 0) return;
+    const now = Date.now();
+    if (now - lastCommandSentAt < COMMAND_DELAY_MS) return;
+    const next = commandQueue.shift();
+    if (settings && settings.debugMode) ChatLib.chat(`&7[DEBUG] (Queue) Sende jetzt: /${next}`);
+    ChatLib.command(next);
+    lastCommandSentAt = now;
+});
 
 // Flüchtiger Cache nur für apiOnly Modus
 let apiPlayersCache = [];
@@ -561,18 +589,20 @@ function autoBackupIfNeeded() {
 }
 function autoCleanupOldEntries() {
     if (!settings.autoCleanupDays || settings.autoCleanupDays === 0) return;
-    const cutoffTime = Date.now() - (settings.autoCleanupDays * 24 * 60 * 60 * 1000);
-    const before = shitterData.players.length;
-    shitterData.players = shitterData.players.filter(p => !p.dateAdded || p.dateAdded >= cutoffTime);
-    const removed = before - shitterData.players.length;
-    if (removed > 0) {
+    
+            slWarn("Maximale Listengröße erreicht!");
+    const initialCount = shitterData.players.length;
+    
+    shitterData.players = shitterData.players.filter(player => player.dateAdded > cutoffTime);
+    
+    const removedCount = initialCount - shitterData.players.length;
+    if (removedCount > 0) {
         saveData();
-        if (settings.debugMode) ChatLib.chat(formatMessage(`Auto-Cleanup: ${removed} Einträge entfernt (< ${settings.autoCleanupDays} Tage)`, "info"));
+        if (settings.debugMode) {
+            ChatLib.chat(formatMessage(`Auto-Cleanup: ${removedCount} alte Einträge entfernt`, "info"));
+        }
     }
 }
-// (Rufe autoCleanupOldEntries z.B. täglich in deinem bestehenden step/backup Tick auf; falls nicht vorhanden,
-// kannst du einen kleinen step hinzufügen:)
-register("step", () => autoCleanupOldEntries()).setDelay(18000); // ~15 Min Intervall
 
 function enhancedPlayerMatch(searchName, playerName) {
     if (!searchName || !playerName) return false;
@@ -2067,11 +2097,9 @@ register("command", (...args) => {
             }
             const kickPlayerName = args[1];
             ChatLib.chat("&6[Shitterlist] &f=== TEST KICK COMMANDS ===");
-            ChatLib.chat("&7Teste alle Kick-Befehle für: " + kickPlayerName);
-            
-            // Teste alle Befehle ohne silent
-            ChatLib.chat("&7[DEBUG] Führe aus: /party kick " + kickPlayerName);
-            ChatLib.command(`party kick ${kickPlayerName}`);
+            ChatLib.chat("&7Teste alle Kick-Befehle (Rate Limited) für: " + kickPlayerName);
+            // ALT: ChatLib.command(`party kick ${kickPlayerName}`);
+            safeCommand(`party kick ${kickPlayerName}`);
             break;
             
         case "update-now":
@@ -2136,9 +2164,9 @@ function ensurePartyLeader(cb) {
 
     partyInfoPending = true;
     beginPartyListSuppression(2000);
-    // WICHTIG: /p list (oder /party list) – /pl funktioniert auf Hypixel nicht für Party
-    if (settings.debugMode) ChatLib.chat("&7[DEBUG] Sende /p list für Leader-Ermittlung");
-    ChatLib.command("p list"); // alias von /party list
+    if (settings.debugMode) ChatLib.chat("&7[DEBUG] Sende (queued) /p list für Leader-Ermittlung");
+    // ALT: ChatLib.command("p list");
+    safeCommand("p list");
 
     const sentAt = Date.now();
     setTimeout(() => {
@@ -2147,7 +2175,7 @@ function ensurePartyLeader(cb) {
             suppressPartyListOutput = false;
             if (settings.debugMode) ChatLib.chat("&7[DEBUG] Leader Timeout – keine Antwort");
             const cbs = partyInfoCallbacks.slice(); partyInfoCallbacks = [];
-            cbs.forEach(f => f(partyLeader)); // kann null sein
+            cbs.forEach(f => f(partyLeader));
         }
     }, 1600);
 }
@@ -2206,8 +2234,72 @@ register("chat", (rawLine, event) => {
         }
     }
 }).setCriteria("${rawLine}");
+            if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Debounce verhindert Doppel-Kick (${joinType}) für ${playerName}`);
+            return;
+        }
+        autoKickSent[key] = now;
+        if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Leader (${leader}) kickt ${playerName} (${joinType})`);
+        sendKickAnnouncement(playerName, reason);
+        scheduleKick(playerName);
+    });
+}
 
-// === ensurePartyLeader: /p list über Queue statt direkt ===
-// Suche in ensurePartyLeader nach: ChatLib.command("p list");
-// Ersetze durch:
-    enqueueCommand("p list", "party-list");
+// Chat Event für Party/Dungeon Warnungen
+register("chat", (message) => {
+    if (!settings.enabled) return;
+    if (settings.debugMode) ChatLib.chat("&7[DEBUG] Chat message: " + message);
+
+    let joinType = null;
+    let detectedName = null;
+
+    const partyJoinMatch = message.match(/^(?:Party > )?(?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16}) joined the party\.$/);
+    if (partyJoinMatch && settings.partyWarnings) {
+        joinType = "party";
+        detectedName = partyJoinMatch[1];
+    }
+
+    if (!joinType && message.includes("joined the dungeon group!") && settings.dungeonWarnings) {
+        const dungeonMatch = message.match(/^(.+?) joined the dungeon group!/);
+        if (dungeonMatch) {
+            joinType = "dungeon";
+            detectedName = dungeonMatch[1].trim().replace(/^Party Finder > /, "");
+        }
+    }
+
+    if (joinType && detectedName) {
+        const playerName = detectedName;                       // Vereinheitlicht
+        // SELF-SUPPRESS: Wenn der Spieler selbst (der lokale Client) in der Liste ist und joint,
+        // dann soll SEIN Client keine Kick-Nachricht senden (sonst doppelt).
+        if (playerName.toLowerCase() === Player.getName().toLowerCase()) {
+            if (settings.debugMode) ChatLib.chat("&7[DEBUG] Eigenen (self) Join erkannt – keine AutoKick Nachricht");
+            return;
+        }
+
+        if (isShitter(playerName)) {
+            // Reason bestimmen
+            const info = getActivePlayerList().find(p => p.name.toLowerCase() === playerName.toLowerCase());
+            const reason = info ? (info.reason || "Unknown") : "Unknown";
+
+            // ALTEN Block entfernen/auskommentieren:
+            // if (settings.autoPartyKick && (joinType === "party" || joinType === "dungeon")) { ... }
+
+            // NEU: Leader-basierter AutoKick (ruft ensurePartyLeader → /p list)
+            if (joinType === "party" || joinType === "dungeon") {
+                attemptAutoKick(playerName, reason, joinType);
+            }
+
+            if (shouldShowWarning(playerName)) {
+                if (joinType === "party") {
+                    slLog("warning", `${playerName} ist ein bekannter Shitter! ${reason}`, "warning");
+                    displayTitleWarning(playerName, reason);
+                    if (settings.warningSound) World.playSound("note.pling", 1, 1);
+                } else {
+                    slLog("warning", `&c${playerName} &7ist im Dungeon-Team! Grund: &c${reason}`, "warning");
+                    displayTitleWarning(playerName, reason);
+                    if (settings.warningSound) World.playSound("note.pling", 1, 0.8);
+                }
+                playCustomJoinSound();
+            }
+        }
+    }
+}).setCriteria("${message}");
