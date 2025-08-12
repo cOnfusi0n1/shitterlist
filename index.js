@@ -703,24 +703,25 @@ function sendDiscordWebhook(action, playerName, reason){
         // Nutze Java HTTP wie bei makeAPIRequest (separat um API URL Einstellungen nicht zu beeinflussen)
         var URL = Java.type("java.net.URL");
         var HttpURLConnection = Java.type("java.net.HttpURLConnection");
-        var OutputStreamWriter = Java.type("java.io.OutputStreamWriter");
+    var OutputStreamWriter = Java.type("java.io.OutputStreamWriter");
         var BufferedReader = Java.type("java.io.BufferedReader");
         var InputStreamReader = Java.type("java.io.InputStreamReader");
         var StringBuilder = Java.type("java.lang.StringBuilder");
+    var StandardCharsets = Java.type("java.nio.charset.StandardCharsets");
         var urlObj = new URL(DISCORD_WEBHOOK_URL);
         var connection = urlObj.openConnection();
         connection.setRequestMethod("POST");
         connection.setRequestProperty("Content-Type", "application/json");
         connection.setRequestProperty("User-Agent", "Shitterlist-Module/1.0");
         connection.setDoOutput(true);
-        var writer = new OutputStreamWriter(connection.getOutputStream());
+    var writer = new OutputStreamWriter(connection.getOutputStream(), StandardCharsets.UTF_8);
         writer.write(JSON.stringify(payload));
         writer.flush();
         writer.close();
         // Optional lesen um Verbindung zu schließen
         try {
             var responseCode = connection.getResponseCode();
-            var reader = new BufferedReader(new InputStreamReader(responseCode >=200 && responseCode <300 ? connection.getInputStream() : connection.getErrorStream()));
+            var reader = new BufferedReader(new InputStreamReader(responseCode >=200 && responseCode <300 ? connection.getInputStream() : connection.getErrorStream(), StandardCharsets.UTF_8));
             var sb = new StringBuilder(); var line; while((line = reader.readLine()) !== null) { sb.append(line); }
             reader.close();
             if (settings.debugMode) {
@@ -795,12 +796,13 @@ function makeAPIRequest(endpoint, method, data, callback) {
     try {
         var url = settings.apiUrl + endpoint;
         // Verwende Java HTTP Client für ChatTriggers
-        var URL = Java.type("java.net.URL");
-        var HttpURLConnection = Java.type("java.net.HttpURLConnection");
-        var BufferedReader = Java.type("java.io.BufferedReader");
-        var InputStreamReader = Java.type("java.io.InputStreamReader");
-        var OutputStreamWriter = Java.type("java.io.OutputStreamWriter");
-        var StringBuilder = Java.type("java.lang.StringBuilder");
+    var URL = Java.type("java.net.URL");
+    var HttpURLConnection = Java.type("java.net.HttpURLConnection");
+    var BufferedReader = Java.type("java.io.BufferedReader");
+    var InputStreamReader = Java.type("java.io.InputStreamReader");
+    var OutputStreamWriter = Java.type("java.io.OutputStreamWriter");
+    var StringBuilder = Java.type("java.lang.StringBuilder");
+    var StandardCharsets = Java.type("java.nio.charset.StandardCharsets");
         
         var urlObj = new URL(url);
         var connection = urlObj.openConnection();
@@ -830,9 +832,9 @@ function makeAPIRequest(endpoint, method, data, callback) {
         // Response lesen
         var reader;
         if (responseCode >= 200 && responseCode < 300) {
-            reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8));
         } else {
-            reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
+            reader = new BufferedReader(new InputStreamReader(connection.getErrorStream(), StandardCharsets.UTF_8));
         }
         
         var response = new StringBuilder();
@@ -1279,6 +1281,7 @@ function fetchRemoteText(url, callback) {
             var HttpURLConnection = Java.type("java.net.HttpURLConnection");
             var BufferedReader = Java.type("java.io.BufferedReader");
             var InputStreamReader = Java.type("java.io.InputStreamReader");
+            var StandardCharsets = Java.type("java.nio.charset.StandardCharsets");
             var StringBuilder = Java.type("java.lang.StringBuilder");
 
             var urlObj = new URL(url);
@@ -1290,7 +1293,8 @@ function fetchRemoteText(url, callback) {
 
             var responseCode = connection.getResponseCode();
             var reader = new BufferedReader(new InputStreamReader(
-                responseCode >= 200 && responseCode < 300 ? connection.getInputStream() : connection.getErrorStream()
+                responseCode >= 200 && responseCode < 300 ? connection.getInputStream() : connection.getErrorStream(),
+                StandardCharsets.UTF_8
             ));
             var sb = new StringBuilder();
             var line;
