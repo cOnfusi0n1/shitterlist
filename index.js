@@ -650,11 +650,20 @@ function attemptAutoKick(playerName, reason, joinType){
     if (typeof settings === 'undefined' || !settings.autoPartyKick) return;
     const key = playerName.toLowerCase();
     const now = Date.now();
-    if (autoKickSent[key] && now - autoKickSent[key] < 5000) return; // debounce
+    if (autoKickSent[key] && now - autoKickSent[key] < 5000) {
+        if (settings.debugMode) ChatLib.chat(`&7[DEBUG] AutoKick Debounce aktiv für ${playerName}`);
+        return;
+    }
+    if (settings.debugMode) ChatLib.chat(`&7[DEBUG] AutoKick Start für ${playerName} (${joinType}) – frage Leader ab...`);
     ensurePartyLeader(leader => {
-        if (!leader) return;
-        if (leader.toLowerCase() !== Player.getName().toLowerCase()) return;
+        if (!leader) { if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Kein Leader (nicht in Party?) – kein Kick für ${playerName}`); return; }
+        const me = Player.getName();
+        if (leader.toLowerCase() !== me.toLowerCase()) {
+            if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Leader ist ${leader}, ich bin ${me} – überspringe Kick für ${playerName}`);
+            return; // nur echter Leader
+        }
         autoKickSent[key] = now;
+        if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Sende Kick Announcement + Kick für ${playerName}`);
         sendKickAnnouncement(playerName, reason);
         scheduleKick(playerName);
     });
