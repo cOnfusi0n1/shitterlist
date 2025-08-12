@@ -428,6 +428,29 @@ function showApiSyncMessage(msg, type = "info") {
 function slInfo(msg) { slLog("general", msg, "info"); }
 function slSuccess(msg) { slLog("general", msg, "success"); }
 function slWarn(msg) { slLog("warning", msg, "warning"); }
+// Umlaut-Reparatur (falls Zeichen als Mojibake reinkommen)
+function normalizeUmlauts(text){
+    if(!text) return text;
+    // Häufige UTF-8→Latin1 Doppeldekodierungen
+    return text
+        .replace(/Ã¼/g, 'ü').replace(/Ãœ/g, 'Ü')
+        .replace(/Ã¶/g, 'ö').replace(/Ã–/g, 'Ö')
+        .replace(/Ã¤/g, 'ä').replace(/Ã„/g, 'Ä')
+        .replace(/ÃŸ/g, 'ß')
+        .replace(/Ã„/g, 'Ä')
+        .replace(/â€“/g, '–')
+        .replace(/â€”/g, '—')
+        .replace(/â€œ/g, '“').replace(/â€/g, '”')
+        .replace(/â€ž/g, '„')
+        .replace(/â€˜/g, '‘').replace(/â€™/g, '’')
+        .replace(/â€§/g, '‧')
+        .replace(/â€¦/g, '…')
+        .replace(/Â°/g, '°')
+        .replace(/Â /g, ' ');
+}
+// Wrapper die automatisch normalisieren
+const _slLogOrig = slLog;
+slLog = function(channel,msg,level){ _slLogOrig(channel, normalizeUmlauts(msg), level); };
 // ==========================================
 
 // Hilfsfunktionen (playNotificationSound, showTitleWarning, etc.)
@@ -1415,7 +1438,7 @@ function performSelfUpdate(forceInstall, cb) {
 }
 
 function triggerManualUpdateCheck() {
-    slInfo("Prüfe auf Updates...");
+    slInfo("Prüfe auf Updates..."); // wird durch normalizeUmlauts abgesichert
     checkForUpdate((hasUpdate) => {
         if (hasUpdate) {
             slLog("general", "Update verfügbar – klicke zum Installieren", "info");
