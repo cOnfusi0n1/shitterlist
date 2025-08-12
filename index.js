@@ -364,6 +364,8 @@ let shitterData = {
 
 // Verhindert doppelte Auto-Kick Nachrichten (z.B. erst Party-Join, dann Dungeon-Group Join)
 const autoKickRecent = {}; // { playerNameLower: timestamp }
+// Verhindert doppelte Verarbeitung (Party + Dungeon schnell hintereinander)
+const recentDetections = {}; // { playerNameLower: timestamp }
 
 // Flüchtiger Cache nur für apiOnly Modus
 let apiPlayersCache = [];
@@ -1580,6 +1582,15 @@ register("chat", (message) => {
     if (joinType && detectedName) {
         if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Join detected (${joinType}): ${detectedName}`);
         const playerName = detectedName;
+        // Globale Erkennungs-Debounce (z.B. zuerst Party dann sofort Dungeon)
+        const keyLower = playerName.toLowerCase();
+        const nowTs = Date.now();
+        const lastDetect = recentDetections[keyLower] || 0;
+        if (nowTs - lastDetect < 3500) {
+            if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Detection debounce skip for ${playerName}`);
+            return; // komplette doppelte Verarbeitung überspringen
+        }
+        recentDetections[keyLower] = nowTs;
         if (isShitter(playerName)) {
             const shitterInfo = getActivePlayerList().find(p => p.name.toLowerCase() === playerName.toLowerCase());
             let reason = (shitterInfo && shitterInfo.reason) ? shitterInfo.reason : "Unknown";
