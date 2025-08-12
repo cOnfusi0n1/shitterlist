@@ -428,8 +428,32 @@ function showApiSyncMessage(msg, type = "info") {
 function slInfo(msg) { slLog("general", msg, "info"); }
 function slSuccess(msg) { slLog("general", msg, "success"); }
 function slWarn(msg) { slLog("warning", msg, "warning"); }
+// Umlaut-Reparatur (falls Zeichen als Mojibake reinkommen)
+function normalizeUmlauts(text){
+    if(!text) return text;
+    // Häufige UTF-8→Latin1 Doppeldekodierungen
+    return text
+        .replace(/Ã¼/g, 'ü').replace(/Ãœ/g, 'Ü')
+        .replace(/Ã¶/g, 'ö').replace(/Ã–/g, 'Ö')
+        .replace(/Ã¤/g, 'ä').replace(/Ã„/g, 'Ä')
+        .replace(/ÃŸ/g, 'ß')
+        .replace(/Ã„/g, 'Ä')
+        .replace(/â€“/g, '–')
+        .replace(/â€”/g, '—')
+        .replace(/â€œ/g, '“').replace(/â€/g, '”')
+        .replace(/â€ž/g, '„')
+        .replace(/â€˜/g, '‘').replace(/â€™/g, '’')
+        .replace(/â€§/g, '‧')
+        .replace(/â€¦/g, '…')
+        .replace(/Â°/g, '°')
+        .replace(/Â /g, ' ');
+}
+// Wrapper die automatisch normalisieren
+const _slLogOrig = slLog;
+slLog = function(channel,msg,level){ _slLogOrig(channel, normalizeUmlauts(msg), level); };
+// ==========================================
 
-// Hilfsfunktionen (playNotificationSound, showTitleWarning, etc.)
+// Hilfsfunktionen (playNotificationSound, displayTitleWarning, etc.)
 
 function playNotificationSound(type) {
     if (!type) type = "warning";
@@ -451,25 +475,22 @@ function playCustomJoinSound() {
     try { World.playSound(evt, vol, pitch); } catch(e) { if (settings.debugMode) ChatLib.chat(`&7[DEBUG] CustomSound Fehler: ${e}`); }
 }
 
-function showTitleWarning(playerName, reason) {
-    if (!reason) reason = "Unknown";
-    if (!settings.showTitleWarning) return;
-    const title = "&c⚠ SHITTER DETECTED ⚠";
-    const subtitle = `&f${playerName} &7(${reason})`;
-    Client.showTitle(title, subtitle, 10, 60, 20);
-}
-
-function playCustomJoinSound() {
-    if (!settings.customJoinSoundEnabled) return;
-    const name = (settings.customJoinSoundName || '').trim();
-    if (!name) return;
-    // Volume 0-100 -> 0-1, Pitch 50-200 -> 0.5 - 2.0
-    const vol = Math.max(0, Math.min(100, settings.customJoinSoundVolume)) / 100;
-    const pitch = Math.max(50, Math.min(200, settings.customJoinSoundPitch)) / 100;
+// Zeigt eine große Titel-Warnung. Wandelt & Farb-Codes in § um (ChatTriggers Titles benötigen tatsächliche § Codes)
+function displayTitleWarning(playerName, reason) {
+    if (!reason || !reason.trim()) reason = "Unknown";
+    if (!settings.showTitleWarning) {
+        if (settings.debugMode) ChatLib.chat("&7[DEBUG] Title übersprungen (Einstellung aus)");
+        return;
+    }
+    const rawTitle = "&c⚠ SHITTER DETECTED ⚠";
+    const rawSubtitle = `&f${playerName} &7(${reason})`;
+    const title = rawTitle.replace(/&/g, "§");
+    const subtitle = rawSubtitle.replace(/&/g, "§");
     try {
-        World.playSound(name, vol, pitch);
+        Client.showTitle(title, subtitle, 10, 80, 20); // etwas länger sichtbar (Stay 80 Ticks = 4s)
+        if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Title gezeigt für &f${playerName}`);
     } catch(e) {
-        if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Custom Join Sound Fehler: ${e}`);
+        ChatLib.chat(`&c[Shitterlist] Konnte Title nicht anzeigen: ${e}`);
     }
 }
 
@@ -1273,24 +1294,6 @@ let updaterState = {
     checking: false
 };
 
-// Wandelt Nicht-ASCII Zeichen in \uXXXX Escapes um, damit der ChatTriggers Loader (falls Latin1) trotzdem korrekte Zeichen rendert
-function escapeNonAscii(str){
-    if(!str) return str;
-    let out = '';
-    for (let i=0;i<str.length;i++) {
-        const c = str.charCodeAt(i);
-        if (c < 32 && c !== 10 && c !== 13 && c !== 9) { // Steuerzeichen (außer CR/LF/TAB) weglassen
-            continue;
-        }
-        if (c > 126) {
-            out += "\\u" + ("0000" + c.toString(16)).slice(-4);
-        } else {
-            out += str[i];
-        }
-    }
-    return out;
-}
-
 function fetchRemoteText(url, callback) {
     runAsync('updaterFetch', () => {
         try {
@@ -1413,15 +1416,12 @@ function performSelfUpdate(forceInstall, cb) {
             // Nur schreiben wenn sich Inhalt wirklich unterscheidet oder forceInstall aktiv ist
             const current = FileLib.read("Shitterlist", UPDATER_TARGET_FILE) || "";
             if (forceInstall || current !== remoteIndexContent) {
-                // Vor dem Schreiben: Nicht-ASCII escapen um Mojibake zu verhindern
-                const safeContent = escapeNonAscii(remoteIndexContent);
-                FileLib.write("Shitterlist", UPDATER_TARGET_FILE, safeContent);
+                FileLib.write("Shitterlist", UPDATER_TARGET_FILE, remoteIndexContent);
             }
             if (remoteMetaContent) {
                 const curMeta = FileLib.read("Shitterlist", UPDATER_METADATA_FILE) || "";
                 if (forceInstall || curMeta !== remoteMetaContent) {
-                    const safeMeta = escapeNonAscii(remoteMetaContent);
-                    FileLib.write("Shitterlist", UPDATER_METADATA_FILE, safeMeta);
+                    FileLib.write("Shitterlist", UPDATER_METADATA_FILE, remoteMetaContent);
                 }
             }
             slSuccess("Update installiert. Lade neu...");
@@ -1589,11 +1589,11 @@ register("chat", (message) => {
             if (shouldShowWarning(playerName)) {
                 if (joinType === "party") {
                     slLog("warning", `${playerName} ist ein bekannter Shitter! ${reason}`, "warning");
-                    showTitleWarning(playerName, reason); // zentrale Funktion
+                    displayTitleWarning(playerName, reason); // zentrale Funktion
                     if (settings.warningSound) World.playSound("note.pling", 1, 1);
                 } else {
                     slLog("warning", `&c${playerName} &7ist im Dungeon-Team! Grund: &c${reason}`, "warning");
-                    showTitleWarning(playerName, reason);
+                    displayTitleWarning(playerName, reason);
                     if (settings.warningSound) World.playSound("note.pling", 1, 0.8);
                 }
                 playCustomJoinSound();
