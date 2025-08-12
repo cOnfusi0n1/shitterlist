@@ -1582,21 +1582,13 @@ register("chat", (message) => {
     if (joinType && detectedName) {
         if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Join detected (${joinType}): ${detectedName}`);
         const playerName = detectedName;
-        // Globale Erkennungs-Debounce (z.B. zuerst Party dann sofort Dungeon)
-        const keyLower = playerName.toLowerCase();
-        const nowTs = Date.now();
-        const lastDetect = recentDetections[keyLower] || 0;
-        if (nowTs - lastDetect < 3500) {
-            if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Detection debounce skip for ${playerName}`);
-            return; // komplette doppelte Verarbeitung überspringen
-        }
-        recentDetections[keyLower] = nowTs;
+    // Detection NICHT komplett überspringen; nur Kick-Spam verhindern.
         if (isShitter(playerName)) {
             const shitterInfo = getActivePlayerList().find(p => p.name.toLowerCase() === playerName.toLowerCase());
             let reason = (shitterInfo && shitterInfo.reason) ? shitterInfo.reason : "Unknown";
             if (!reason.trim()) reason = "Unknown";
 
-            // Auto Kick (mit Debounce um Doppel-Ausgaben zu verhindern)
+            // Auto Kick (Debounce nur pro Spieler, gleiche Logik für Party und Dungeon)
             if ((joinType === "party" || joinType === "dungeon") && settings.autoPartyKick) {
                 const key = playerName.toLowerCase();
                 const nowTs = Date.now();
@@ -1608,7 +1600,7 @@ register("chat", (message) => {
                     try {
                         let reasonMsg = reason;
                         if (reasonMsg.length > 80) reasonMsg = reasonMsg.substring(0, 77) + "...";
-                        ChatLib.command(`pc Kicking ${playerName} - Reason: ${reasonMsg}`);
+                        ChatLib.command(`pc Kicking ${playerName} - Reason: ${reasonMsg}`); // Einheitliche Nachricht für beide Join-Typen
                         if (settings.debugMode) ChatLib.chat("&7[DEBUG] Kick Nachricht gesendet (Kick in 1s)");
                     } catch(e) { if (settings.debugMode) ChatLib.chat("&7[DEBUG] PC msg error: " + e.message); }
                     setTimeout(() => {
