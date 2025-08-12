@@ -428,30 +428,6 @@ function showApiSyncMessage(msg, type = "info") {
 function slInfo(msg) { slLog("general", msg, "info"); }
 function slSuccess(msg) { slLog("general", msg, "success"); }
 function slWarn(msg) { slLog("warning", msg, "warning"); }
-// Umlaut-Reparatur (falls Zeichen als Mojibake reinkommen)
-function normalizeUmlauts(text){
-    if(!text) return text;
-    // Häufige UTF-8→Latin1 Doppeldekodierungen
-    return text
-        .replace(/Ã¼/g, 'ü').replace(/Ãœ/g, 'Ü')
-        .replace(/Ã¶/g, 'ö').replace(/Ã–/g, 'Ö')
-        .replace(/Ã¤/g, 'ä').replace(/Ã„/g, 'Ä')
-        .replace(/ÃŸ/g, 'ß')
-        .replace(/Ã„/g, 'Ä')
-        .replace(/â€“/g, '–')
-        .replace(/â€”/g, '—')
-        .replace(/â€œ/g, '“').replace(/â€/g, '”')
-        .replace(/â€ž/g, '„')
-        .replace(/â€˜/g, '‘').replace(/â€™/g, '’')
-        .replace(/â€§/g, '‧')
-        .replace(/â€¦/g, '…')
-        .replace(/Â°/g, '°')
-        .replace(/Â /g, ' ');
-}
-// Wrapper die automatisch normalisieren
-const _slLogOrig = slLog;
-slLog = function(channel,msg,level){ _slLogOrig(channel, normalizeUmlauts(msg), level); };
-// ==========================================
 
 // Hilfsfunktionen (playNotificationSound, showTitleWarning, etc.)
 
@@ -1297,6 +1273,24 @@ let updaterState = {
     checking: false
 };
 
+// Wandelt Nicht-ASCII Zeichen in \uXXXX Escapes um, damit der ChatTriggers Loader (falls Latin1) trotzdem korrekte Zeichen rendert
+function escapeNonAscii(str){
+    if(!str) return str;
+    let out = '';
+    for (let i=0;i<str.length;i++) {
+        const c = str.charCodeAt(i);
+        if (c < 32 && c !== 10 && c !== 13 && c !== 9) { // Steuerzeichen (außer CR/LF/TAB) weglassen
+            continue;
+        }
+        if (c > 126) {
+            out += "\\u" + ("0000" + c.toString(16)).slice(-4);
+        } else {
+            out += str[i];
+        }
+    }
+    return out;
+}
+
 function fetchRemoteText(url, callback) {
     runAsync('updaterFetch', () => {
         try {
@@ -1419,12 +1413,15 @@ function performSelfUpdate(forceInstall, cb) {
             // Nur schreiben wenn sich Inhalt wirklich unterscheidet oder forceInstall aktiv ist
             const current = FileLib.read("Shitterlist", UPDATER_TARGET_FILE) || "";
             if (forceInstall || current !== remoteIndexContent) {
-                FileLib.write("Shitterlist", UPDATER_TARGET_FILE, remoteIndexContent);
+                // Vor dem Schreiben: Nicht-ASCII escapen um Mojibake zu verhindern
+                const safeContent = escapeNonAscii(remoteIndexContent);
+                FileLib.write("Shitterlist", UPDATER_TARGET_FILE, safeContent);
             }
             if (remoteMetaContent) {
                 const curMeta = FileLib.read("Shitterlist", UPDATER_METADATA_FILE) || "";
                 if (forceInstall || curMeta !== remoteMetaContent) {
-                    FileLib.write("Shitterlist", UPDATER_METADATA_FILE, remoteMetaContent);
+                    const safeMeta = escapeNonAscii(remoteMetaContent);
+                    FileLib.write("Shitterlist", UPDATER_METADATA_FILE, safeMeta);
                 }
             }
             slSuccess("Update installiert. Lade neu...");
