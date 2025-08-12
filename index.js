@@ -364,8 +364,19 @@ let shitterData = {
 
 // Verhindert doppelte Auto-Kick Nachrichten (z.B. erst Party-Join, dann Dungeon-Group Join)
 const autoKickRecent = {}; // { playerNameLower: timestamp }
-// Verhindert doppelte Verarbeitung (Party + Dungeon schnell hintereinander)
 const recentDetections = {}; // { playerNameLower: timestamp }
+
+// NEU: Debounce für Kick-Ankündigung (Party + Dungeon)
+const autoKickSent = {}; // { playerNameLower: timestamp }
+
+// Kick-Nachricht + Kick ausführen
+function sendKickAnnouncement(playerName, reason) {
+    const r = (reason && reason.trim()) ? reason.trim() : "Unknown";
+    ChatLib.command(`pc Kicking ${playerName} - Reason: ${r}`);
+}
+function scheduleKick(playerName) {
+    setTimeout(() => ChatLib.command(`p kick ${playerName}`), 800);
+}
 
 // Flüchtiger Cache nur für apiOnly Modus
 let apiPlayersCache = [];
@@ -1260,7 +1271,7 @@ function getShitterStats() {
     // Neuester und ältester Eintrag
     const dates = list.map(p => p.dateAdded).sort((a, b) => a - b);
     const oldest = new Date(dates[0]).toLocaleDateString();
-    const newest = new Date(dates[dates.length - 1]).toLocaleDateString();
+    const newest = new Date(dates[datas.length - 1]).toLocaleDateString();
     
     ChatLib.chat("&c[Shitterlist] &f&lStatistiken:");
     ChatLib.chat(`&7Gesamtanzahl: &c${list.length}`);
@@ -1558,19 +1569,12 @@ register("chat", (message) => {
     let joinType = null;
     let detectedName = null;
 
-    // Verbesserte Party Join Erkennung:
-    // Beispiele die jetzt matchen:
-    // Player joined the party.
-    // [MVP+] Player joined the party.
-    // [MVP++] Player joined the party.
-    // Party > [MVP+] Player joined the party.
     const partyJoinMatch = message.match(/^(?:Party > )?(?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16}) joined the party\.$/);
     if (partyJoinMatch && settings.partyWarnings) {
         joinType = "party";
         detectedName = partyJoinMatch[1];
     }
 
-    // Dungeon Join (bestehendes Pattern bleibt) – unterstützt Party Finder Prefix bereits
     if (!joinType && message.includes("joined the dungeon group!") && settings.dungeonWarnings) {
         const dungeonMatch = message.match(/^(.+?) joined the dungeon group!/);
         if (dungeonMatch) {
@@ -1580,41 +1584,38 @@ register("chat", (message) => {
     }
 
     if (joinType && detectedName) {
-        if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Join detected (${joinType}): ${detectedName}`);
-        const playerName = detectedName;
-    // Detection NICHT komplett überspringen; nur Kick-Spam verhindern.
-        if (isShitter(playerName)) {
-            const shitterInfo = getActivePlayerList().find(p => p.name.toLowerCase() === playerName.toLowerCase());
-            let reason = (shitterInfo && shitterInfo.reason) ? shitterInfo.reason : "Unknown";
-            if (!reason.trim()) reason = "Unknown";
+        const playerName = detectedName;                       // Vereinheitlicht
+        // SELF-SUPPRESS: Wenn der Spieler selbst (der lokale Client) in der Liste ist und joint,
+        // dann soll SEIN Client keine Kick-Nachricht senden (sonst doppelt).
+        if (playerName.toLowerCase() === Player.getName().toLowerCase()) {
+            if (settings.debugMode) ChatLib.chat("&7[DEBUG] Eigenen (self) Join erkannt – keine AutoKick Nachricht");
+            return;
+        }
 
-            // Auto Kick (Debounce nur pro Spieler, gleiche Logik für Party und Dungeon)
-            if ((joinType === "party" || joinType === "dungeon") && settings.autoPartyKick) {
+        if (isShitter(playerName)) {
+            // Reason bestimmen
+            const info = getActivePlayerList().find(p => p.name.toLowerCase() === playerName.toLowerCase());
+            const reason = info ? (info.reason || "Unknown") : "Unknown";
+
+            if (settings.autoPartyKick && (joinType === "party" || joinType === "dungeon")) {
                 const key = playerName.toLowerCase();
-                const nowTs = Date.now();
-                const last = autoKickRecent[key] || 0;
-                if (nowTs - last < 4000) {
-                    if (settings.debugMode) ChatLib.chat(`&7[DEBUG] AutoKick übersprungen (Debounce) für ${playerName}`);
+                const now = Date.now();
+                const lastTs = autoKickSent[key] || 0;
+
+                // 6s Sperre gegen Doppeltrigger (Party-Join + Dungeon-Join)
+                if (now - lastTs < 6000) {
+                    if (settings.debugMode) ChatLib.chat(`&7[DEBUG] AutoKick unterdrückt (Debounce ${joinType}) für ${playerName}`);
                 } else {
-                    autoKickRecent[key] = nowTs;
-                    try {
-                        let reasonMsg = reason;
-                        if (reasonMsg.length > 80) reasonMsg = reasonMsg.substring(0, 77) + "...";
-                        ChatLib.command(`pc Kicking ${playerName} - Reason: ${reasonMsg}`); // Einheitliche Nachricht für beide Join-Typen
-                        if (settings.debugMode) ChatLib.chat("&7[DEBUG] Kick Nachricht gesendet (Kick in 1s)");
-                    } catch(e) { if (settings.debugMode) ChatLib.chat("&7[DEBUG] PC msg error: " + e.message); }
-                    setTimeout(() => {
-                        if (settings.debugMode) ChatLib.chat("&7[DEBUG] Kick now: /party kick " + playerName);
-                        ChatLib.command(`party kick ${playerName}`);
-                        ChatLib.chat(`&c[Shitterlist] &f${playerName} automatisch gekickt! Grund: &c${reason}`);
-                    }, 1000);
+                    autoKickSent[key] = now;
+                    sendKickAnnouncement(playerName, reason);
+                    scheduleKick(playerName);
                 }
             }
 
             if (shouldShowWarning(playerName)) {
                 if (joinType === "party") {
                     slLog("warning", `${playerName} ist ein bekannter Shitter! ${reason}`, "warning");
-                    displayTitleWarning(playerName, reason); // zentrale Funktion
+                    displayTitleWarning(playerName, reason);
                     if (settings.warningSound) World.playSound("note.pling", 1, 1);
                 } else {
                     slLog("warning", `&c${playerName} &7ist im Dungeon-Team! Grund: &c${reason}`, "warning");
@@ -1625,6 +1626,8 @@ register("chat", (message) => {
             }
         }
     }
+    // ...existing code...
+
 }).setCriteria("${message}");
 
 // Hauptbefehl
