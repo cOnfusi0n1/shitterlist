@@ -380,7 +380,7 @@ function scheduleKick(playerName) {
 }
 
 // === Neuer Abschnitt: Rate Limiter für Server-Commands ===
-const COMMAND_DELAY_MS = 1400; // Abstand zwischen gesendeten Befehlen (anpassen falls nötig)
+const COMMAND_DELAY_MS = 700; // Abstand zwischen gesendeten Befehlen (anpassen falls nötig)
 const commandQueue = [];
 let lastCommandSentAt = 0;
 
@@ -1563,19 +1563,23 @@ function triggerManualUpdateCheck() {
 
 function startAutoUpdater() {
     if (!settings.autoUpdaterEnabled) return;
-    const intervalMs = Math.max(5, settings.updateCheckInterval) * 60 * 1000;
-
-    register("step", () => {
+    // Für Tests erlauben wir minimale 1 Minute, Standard >=5
+    const minutes = settings.updateCheckInterval || 5;
+    const effectiveMinutes = Math.max(1, minutes);
+    const intervalMs = effectiveMinutes * 60 * 1000;
+    if (settings.debugMode) ChatLib.chat(formatMessage(`AutoUpdater aktiv – Intervall ${effectiveMinutes}m (${intervalMs}ms)`, "info"));
+    if (startAutoUpdater._reg) return; // Doppel-Registrierung vermeiden
+    startAutoUpdater._reg = register("step", () => {
         const now = Date.now();
         if (now - updaterState.lastCheck < intervalMs) return;
         if (updaterState.checking) return;
-
+        if (settings.debugMode) ChatLib.chat(formatMessage("AutoUpdater Tick: starte Check", "info"));
         checkForUpdate((hasUpdate) => {
             if (hasUpdate) {
                 if (settings.autoUpdaterEnabled && settings.autoInstallUpdates) {
+                    slInfo("Update gefunden – automatische Installation...");
                     performSelfUpdate(true);
                 } else {
-                    // Immer Hinweis ausgeben
                     slLog("general", "Update verfügbar – klicke zum Installieren", "info");
                     try {
                         const msg = new Message(
@@ -1590,7 +1594,7 @@ function startAutoUpdater() {
                 ChatLib.chat(formatMessage("Updater: kein Update gefunden", "info"));
             }
         });
-    }).setDelay(60); // prüfen im Minuten-Takt
+    }).setDelay(60); // Schritt alle ~3s (20t) * 60 = 60s
 }
 // ===== End Updater =====
 
