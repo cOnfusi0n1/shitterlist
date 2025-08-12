@@ -2253,7 +2253,8 @@ register("chat", (rawLine, event) => {
     }
 
     // Match Leader / Owner
-    const leaderMatch = line.match(/^Party (?:Leader|Owner): (?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16})$/);
+    // Erweitertes Pattern: erlaubt Farben, Rang-Tags vor dem Namen, Punkt am Ende optional
+    const leaderMatch = line.match(/^Party (?:Leader|Owner):\s+(?:\[[^\]]+\]\s*)*([A-Za-z0-9_]{1,16})(?:\s|$)/);
     if (leaderMatch) {
         partyLeader = leaderMatch[1];
         partyInfoLastUpdate = Date.now();
@@ -2263,6 +2264,23 @@ register("chat", (rawLine, event) => {
         const cbs = partyInfoCallbacks.slice(); partyInfoCallbacks = [];
         partyInfoCallbacks = [];
         cbs.forEach(f => f(partyLeader));
+    } else if (/^Party (?:Leader|Owner):/.test(line)) {
+        // Fallback: extrahiere letzten Token ohne Rang Symbole
+        const raw = line.replace(/^Party (?:Leader|Owner):\s+/, "");
+        const parts = raw.split(/\s+/).filter(Boolean);
+        if (parts.length) {
+            const candidate = parts[parts.length-1].replace(/[^A-Za-z0-9_]/g, "");
+            if (candidate.length >=1 && candidate.length <= 16) {
+                partyLeader = candidate;
+                partyInfoLastUpdate = Date.now();
+                partyInfoPending = false;
+                suppressPartyListOutput = false;
+                if (settings.debugMode) ChatLib.chat("&7[DEBUG] Party-Leader (Fallback) erkannt: " + partyLeader);
+                const cbs2 = partyInfoCallbacks.slice(); partyInfoCallbacks = [];
+                partyInfoCallbacks = [];
+                cbs2.forEach(f => f(partyLeader));
+            }
+        }
     }
 
     // Optional: Wenn „You are not in a party.“ kommt -> kein Leader
