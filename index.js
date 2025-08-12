@@ -362,6 +362,9 @@ let shitterData = {
     apiData: [] // Für API-Daten Cache
 };
 
+// Verhindert doppelte Auto-Kick Nachrichten (z.B. erst Party-Join, dann Dungeon-Group Join)
+const autoKickRecent = {}; // { playerNameLower: timestamp }
+
 // Flüchtiger Cache nur für apiOnly Modus
 let apiPlayersCache = [];
 
@@ -1582,24 +1585,27 @@ register("chat", (message) => {
             let reason = (shitterInfo && shitterInfo.reason) ? shitterInfo.reason : "Unknown";
             if (!reason.trim()) reason = "Unknown";
 
-            // Auto Kick jetzt auch für Dungeon (gleiche Einstellung)
+            // Auto Kick (mit Debounce um Doppel-Ausgaben zu verhindern)
             if ((joinType === "party" || joinType === "dungeon") && settings.autoPartyKick) {
-                try {
-                    let reasonMsg = reason;
-                    if (reasonMsg.length > 80) reasonMsg = reasonMsg.substring(0, 77) + "...";
-                    // Generische Kick-Ankündigung
-                    ChatLib.command(`pc Kicking ${playerName} - Reason: ${reasonMsg}`);
-                    // Zusätzliche spezifische Dungeon Nachricht
-                    if (joinType === "dungeon") {
-                        ChatLib.command(`pc Kicking ${playerName} - Grund: ${reasonMsg}`);
-                    }
-                    if (settings.debugMode) ChatLib.chat("&7[DEBUG] Kick Nachricht gesendet (Kick in 1s)");
-                } catch(e) { if (settings.debugMode) ChatLib.chat("&7[DEBUG] PC msg error: " + e.message); }
-                setTimeout(() => {
-                    if (settings.debugMode) ChatLib.chat("&7[DEBUG] Kick now: /party kick " + playerName);
-                    ChatLib.command(`party kick ${playerName}`);
-                    ChatLib.chat(`&c[Shitterlist] &f${playerName} automatisch gekickt! Grund: &c${reason}`);
-                }, 1000);
+                const key = playerName.toLowerCase();
+                const nowTs = Date.now();
+                const last = autoKickRecent[key] || 0;
+                if (nowTs - last < 4000) {
+                    if (settings.debugMode) ChatLib.chat(`&7[DEBUG] AutoKick übersprungen (Debounce) für ${playerName}`);
+                } else {
+                    autoKickRecent[key] = nowTs;
+                    try {
+                        let reasonMsg = reason;
+                        if (reasonMsg.length > 80) reasonMsg = reasonMsg.substring(0, 77) + "...";
+                        ChatLib.command(`pc Kicking ${playerName} - Reason: ${reasonMsg}`);
+                        if (settings.debugMode) ChatLib.chat("&7[DEBUG] Kick Nachricht gesendet (Kick in 1s)");
+                    } catch(e) { if (settings.debugMode) ChatLib.chat("&7[DEBUG] PC msg error: " + e.message); }
+                    setTimeout(() => {
+                        if (settings.debugMode) ChatLib.chat("&7[DEBUG] Kick now: /party kick " + playerName);
+                        ChatLib.command(`party kick ${playerName}`);
+                        ChatLib.chat(`&c[Shitterlist] &f${playerName} automatisch gekickt! Grund: &c${reason}`);
+                    }, 1000);
+                }
             }
 
             if (shouldShowWarning(playerName)) {
