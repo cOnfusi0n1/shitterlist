@@ -33,12 +33,12 @@ register('command', (...args)=>{
     ChatLib.chat('&e/sl download &7- API-Daten herunterladen');
     ChatLib.chat('&e/sl apistatus &7- API-Status prüfen');
     ChatLib.chat('&e/sl testdetection <name> &7- Teste Spieler-Erkennung');
-  ChatLib.chat('&e/sl testkick <name> &7- Teste Party-Kick');
-  ChatLib.chat('&e/sl breakdown &7- Daten-Diagnose');
-  ChatLib.chat('&e/sl reclass &7- Re-Klassifiziere [API] Einträge');
-  ChatLib.chat('&e/sl toggle <setting> &7- Einstellung umschalten');
-  ChatLib.chat('&e/sl reloadgui &7- Vigilance neu laden');
-  ChatLib.chat('&e/sl testmessage <msg> &7- Chat Detection testen');
+    ChatLib.chat('&e/sl testkick <name> &7- Teste Party-Kick');
+    ChatLib.chat('&e/sl breakdown &7- Daten-Diagnose');
+    ChatLib.chat('&e/sl reclass &7- Re-Klassifiziere [API] Einträge');
+    ChatLib.chat('&e/sl toggle <setting> &7- Einstellung umschalten');
+    ChatLib.chat('&e/sl reloadgui &7- Vigilance neu laden');
+    ChatLib.chat('&e/sl testmessage <msg> &7- Chat Detection testen');
     ChatLib.chat('&e/sl update-now &7- Sofort updaten');
     ChatLib.chat('&e/sl checkupdate &7- Update-Check');
     return;
