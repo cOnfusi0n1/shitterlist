@@ -372,10 +372,10 @@ const autoKickSent = {}; // { playerNameLower: timestamp }
 // Kick-Nachricht + Kick ausführen
 function sendKickAnnouncement(playerName, reason) {
     const r = (reason && reason.trim()) ? reason.trim() : "Unknown";
-    ChatLib.command(`pc Kicking ${playerName} - Reason: ${r}`);
+    enqueueCommand(`pc Kicking ${playerName} - Reason: ${r}`, "announce");
 }
 function scheduleKick(playerName) {
-    setTimeout(() => ChatLib.command(`p kick ${playerName}`), 800);
+    enqueueCommand(`p kick ${playerName}`, "kick");
 }
 
 // Flüchtiger Cache nur für apiOnly Modus
@@ -561,20 +561,18 @@ function autoBackupIfNeeded() {
 }
 function autoCleanupOldEntries() {
     if (!settings.autoCleanupDays || settings.autoCleanupDays === 0) return;
-    
-            slWarn("Maximale Listengröße erreicht!");
-    const initialCount = shitterData.players.length;
-    
-    shitterData.players = shitterData.players.filter(player => player.dateAdded > cutoffTime);
-    
-    const removedCount = initialCount - shitterData.players.length;
-    if (removedCount > 0) {
+    const cutoffTime = Date.now() - (settings.autoCleanupDays * 24 * 60 * 60 * 1000);
+    const before = shitterData.players.length;
+    shitterData.players = shitterData.players.filter(p => !p.dateAdded || p.dateAdded >= cutoffTime);
+    const removed = before - shitterData.players.length;
+    if (removed > 0) {
         saveData();
-        if (settings.debugMode) {
-            ChatLib.chat(formatMessage(`Auto-Cleanup: ${removedCount} alte Einträge entfernt`, "info"));
-        }
+        if (settings.debugMode) ChatLib.chat(formatMessage(`Auto-Cleanup: ${removed} Einträge entfernt (< ${settings.autoCleanupDays} Tage)`, "info"));
     }
 }
+// (Rufe autoCleanupOldEntries z.B. täglich in deinem bestehenden step/backup Tick auf; falls nicht vorhanden,
+// kannst du einen kleinen step hinzufügen:)
+register("step", () => autoCleanupOldEntries()).setDelay(18000); // ~15 Min Intervall
 
 function enhancedPlayerMatch(searchName, playerName) {
     if (!searchName || !playerName) return false;
@@ -1597,19 +1595,12 @@ register("chat", (message) => {
             const info = getActivePlayerList().find(p => p.name.toLowerCase() === playerName.toLowerCase());
             const reason = info ? (info.reason || "Unknown") : "Unknown";
 
-            if (settings.autoPartyKick && (joinType === "party" || joinType === "dungeon")) {
-                const key = playerName.toLowerCase();
-                const now = Date.now();
-                const lastTs = autoKickSent[key] || 0;
+            // ALTEN Block entfernen/auskommentieren:
+            // if (settings.autoPartyKick && (joinType === "party" || joinType === "dungeon")) { ... }
 
-                // 6s Sperre gegen Doppeltrigger (Party-Join + Dungeon-Join)
-                if (now - lastTs < 6000) {
-                    if (settings.debugMode) ChatLib.chat(`&7[DEBUG] AutoKick unterdrückt (Debounce ${joinType}) für ${playerName}`);
-                } else {
-                    autoKickSent[key] = now;
-                    sendKickAnnouncement(playerName, reason);
-                    scheduleKick(playerName);
-                }
+            // NEU: Leader-basierter AutoKick (ruft ensurePartyLeader → /p list)
+            if (joinType === "party" || joinType === "dungeon") {
+                attemptAutoKick(playerName, reason, joinType);
             }
 
             if (shouldShowWarning(playerName)) {
@@ -2216,90 +2207,7 @@ register("chat", (rawLine, event) => {
     }
 }).setCriteria("${rawLine}");
 
-// ...existing code (nach sendKickAnnouncement / scheduleKick, vor Chat-Events einfügen)...
-function attemptAutoKick(playerName, reason, joinType) {
-    if (!settings.autoPartyKick) return;
-    // Leader ermitteln (triggert /p list + Suppression)
-    ensurePartyLeader((leader) => {
-        if (!leader) {
-            if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Kein Leader ermittelt – Kick abgebrochen (${playerName})`);
-            return;
-        }
-        const amLeader = leader.toLowerCase() === Player.getName().toLowerCase();
-        if (!amLeader) {
-            if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Bin nicht Leader (${leader}) – Kick übersprungen für ${playerName}`);
-            return;
-        }
-        const key = playerName.toLowerCase();
-        const now = Date.now();
-        const lastTs = autoKickSent[key] || 0;
-        if (now - lastTs < 6000) {
-            if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Debounce verhindert Doppel-Kick (${joinType}) für ${playerName}`);
-            return;
-        }
-        autoKickSent[key] = now;
-        if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Leader (${leader}) kickt ${playerName} (${joinType})`);
-        sendKickAnnouncement(playerName, reason);
-        scheduleKick(playerName);
-    });
-}
-
-// Chat Event für Party/Dungeon Warnungen
-register("chat", (message) => {
-    if (!settings.enabled) return;
-    if (settings.debugMode) ChatLib.chat("&7[DEBUG] Chat message: " + message);
-
-    let joinType = null;
-    let detectedName = null;
-
-    const partyJoinMatch = message.match(/^(?:Party > )?(?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16}) joined the party\.$/);
-    if (partyJoinMatch && settings.partyWarnings) {
-        joinType = "party";
-        detectedName = partyJoinMatch[1];
-    }
-
-    if (!joinType && message.includes("joined the dungeon group!") && settings.dungeonWarnings) {
-        const dungeonMatch = message.match(/^(.+?) joined the dungeon group!/);
-        if (dungeonMatch) {
-            joinType = "dungeon";
-            detectedName = dungeonMatch[1].trim().replace(/^Party Finder > /, "");
-        }
-    }
-
-    if (joinType && detectedName) {
-        const playerName = detectedName;                       // Vereinheitlicht
-        // SELF-SUPPRESS: Wenn der Spieler selbst (der lokale Client) in der Liste ist und joint,
-        // dann soll SEIN Client keine Kick-Nachricht senden (sonst doppelt).
-        if (playerName.toLowerCase() === Player.getName().toLowerCase()) {
-            if (settings.debugMode) ChatLib.chat("&7[DEBUG] Eigenen (self) Join erkannt – keine AutoKick Nachricht");
-            return;
-        }
-
-        if (isShitter(playerName)) {
-            // Reason bestimmen
-            const info = getActivePlayerList().find(p => p.name.toLowerCase() === playerName.toLowerCase());
-            const reason = info ? (info.reason || "Unknown") : "Unknown";
-
-            // ALTEN Block entfernen/auskommentieren:
-            // if (settings.autoPartyKick && (joinType === "party" || joinType === "dungeon")) { ... }
-
-            // NEU: Leader-basierter AutoKick (ruft ensurePartyLeader → /p list)
-            if (joinType === "party" || joinType === "dungeon") {
-                attemptAutoKick(playerName, reason, joinType);
-            }
-
-            if (shouldShowWarning(playerName)) {
-                if (joinType === "party") {
-                    slLog("warning", `${playerName} ist ein bekannter Shitter! ${reason}`, "warning");
-                    displayTitleWarning(playerName, reason);
-                    if (settings.warningSound) World.playSound("note.pling", 1, 1);
-                } else {
-                    slLog("warning", `&c${playerName} &7ist im Dungeon-Team! Grund: &c${reason}`, "warning");
-                    displayTitleWarning(playerName, reason);
-                    if (settings.warningSound) World.playSound("note.pling", 1, 0.8);
-                }
-                playCustomJoinSound();
-            }
-        }
-    }
-}).setCriteria("${message}");
+// === ensurePartyLeader: /p list über Queue statt direkt ===
+// Suche in ensurePartyLeader nach: ChatLib.command("p list");
+// Ersetze durch:
+    enqueueCommand("p list", "party-list");
