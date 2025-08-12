@@ -186,39 +186,37 @@ class Settings {
         max: 200
     })
     customJoinSoundPitch = 100;
+    // Doppelte Sound Settings entfernt
 
     @SwitchProperty({
-        name: "Custom Join Sound aktivieren",
-        description: "Spielt einen eigenen Sound (Resourcepack Sound-Event) bei Shitter-Join",
-        category: "Sounds"
+        name: "Auto Backup",
+        description: "Erstellt täglich ein Backup",
+        category: "Advanced"
     })
-    customJoinSoundEnabled = false;
-
-    @TextProperty({
-        name: "Custom Join Sound Event",
-        description: "Name des Sound-Events (z.B. shitterlist.alert) – muss per Resourcepack definiert sein",
-        category: "Sounds",
-        placeholder: "shitterlist.alert"
-    })
-    customJoinSoundName = "";
+    autoBackup = true;
 
     @SliderProperty({
-        name: "Custom Join Volume",
-        description: "Lautstärke für Custom Join Sound (0-100)",
-        category: "Sounds",
+        name: "Auto Cleanup Tage",
+        description: "Entfernt Einträge älter als X Tage (0=aus)",
+        category: "Advanced",
         min: 0,
-        max: 100
+        max: 365
     })
-    customJoinSoundVolume = 100;
+    autoCleanupDays = 0;
 
-    @SliderProperty({
-        name: "Custom Join Pitch",
-        description: "Pitch für Custom Join Sound (50=0.5 bis 200=2.0)",
-        category: "Sounds",
-        min: 50,
-        max: 200
+    @SwitchProperty({
+        name: "Case Sensitive",
+        description: "Groß-/Kleinschreibung beim Matchen beachten",
+        category: "Advanced"
     })
-    customJoinSoundPitch = 100;
+    caseSensitive = false;
+
+    @SwitchProperty({
+        name: "Teilstring Match",
+        description: "Teilstring namenssuche erlauben",
+        category: "Advanced"
+    })
+    partialMatching = false;
 
     // === API SETTINGS ===
     @SwitchProperty({
@@ -588,20 +586,12 @@ function autoBackupIfNeeded() {
     }
 }
 function autoCleanupOldEntries() {
-    if (!settings.autoCleanupDays || settings.autoCleanupDays === 0) return;
-    
-            slWarn("Maximale Listengröße erreicht!");
-    const initialCount = shitterData.players.length;
-    
-    shitterData.players = shitterData.players.filter(player => player.dateAdded > cutoffTime);
-    
-    const removedCount = initialCount - shitterData.players.length;
-    if (removedCount > 0) {
-        saveData();
-        if (settings.debugMode) {
-            ChatLib.chat(formatMessage(`Auto-Cleanup: ${removedCount} alte Einträge entfernt`, "info"));
-        }
-    }
+    if (!settings.autoCleanupDays || settings.autoCleanupDays <= 0) return;
+    const cutoff = Date.now() - settings.autoCleanupDays * 24*60*60*1000;
+    const before = shitterData.players.length;
+    shitterData.players = shitterData.players.filter(p => !p.dateAdded || p.dateAdded >= cutoff);
+    const removed = before - shitterData.players.length;
+    if (removed > 0) { saveData(); if (settings.debugMode) slInfo(`Auto-Cleanup entfernte ${removed} Einträge`); }
 }
 
 function enhancedPlayerMatch(searchName, playerName) {
@@ -655,6 +645,21 @@ function addShitter(username, reason) {
     return entry;
 }
 
+// AutoKick Implementierung (falls noch nicht vorhanden)
+function attemptAutoKick(playerName, reason, joinType){
+    if (typeof settings === 'undefined' || !settings.autoPartyKick) return;
+    const key = playerName.toLowerCase();
+    const now = Date.now();
+    if (autoKickSent[key] && now - autoKickSent[key] < 5000) return; // debounce
+    ensurePartyLeader(leader => {
+        if (!leader) return;
+        if (leader.toLowerCase() !== Player.getName().toLowerCase()) return;
+        autoKickSent[key] = now;
+        sendKickAnnouncement(playerName, reason);
+        scheduleKick(playerName);
+    });
+}
+
 function removeShitter(username) {
     if (API_ONLY) {
     return apiRemoveShitterDirect(username);
@@ -672,6 +677,49 @@ function removeShitter(username) {
     }
     return removed;
 }
+
+// === Persistenz & Utility-Funktionen ===
+function saveData() {
+    try {
+        const snapshot = Object.assign({}, shitterData);
+        if (API_ONLY) snapshot.players = []; // im API_ONLY Modus Spieler nicht persistieren
+        FileLib.write("Shitterlist", ".data.json", JSON.stringify(snapshot, null, 2));
+    } catch(e){ if (settings && settings.debugMode) ChatLib.chat(`&7[DEBUG] saveData Fehler: ${e.message}`); }
+}
+
+function clearList() {
+    if (API_ONLY) { slWarn("API-Only: Liste kommt von API, lokales Löschen deaktiviert"); return; }
+    shitterData.players = [];
+    saveData();
+    slSuccess("Alle Einträge gelöscht");
+}
+
+function getRandomShitter(){
+    const list = getActivePlayerList();
+    if (!list.length){ slWarn("Liste leer"); return; }
+    const p = list[Math.floor(Math.random()*list.length)];
+    ChatLib.chat(`&c[Shitterlist] &fZufällig: &c${p.name} &7(${p.reason||'Unknown'})`);
+}
+
+function checkOnlineShitters(){
+    try {
+        const tab = (TabList.getNames()||[]).map(n=>cleanPlayerName(n)).filter(Boolean);
+        const list = getActivePlayerList();
+        const found = list.filter(p => tab.some(t => t.toLowerCase() === p.name.toLowerCase()));
+        if (!found.length){ slInfo("Keine gelisteten Spieler online"); return; }
+        slWarn(`Online erkannt (${found.length}): ${found.map(f=>f.name).join(', ')}`);
+    } catch(e){ slWarn("Online-Check Fehler: "+e.message); }
+}
+
+function exportShitterlist(){
+    try {
+        const arr = getActivePlayerList();
+        FileLib.write("Shitterlist", "shitterlist_export.json", JSON.stringify(arr, null, 2));
+        slSuccess(`Export gespeichert (${arr.length} Einträge)`);
+    } catch(e){ slWarn("Export Fehler: "+e.message); }
+}
+
+function showSettingsAlternative(){ try { settings.openGUI(); } catch(e){ slWarn("GUI Fehler: "+e.message); } }
 
 // Direktes Hinzufügen an die API im API_ONLY Modus
 function apiAddShitterDirect(username, reason) {
@@ -1299,7 +1347,7 @@ function getShitterStats() {
     // Neuester und ältester Eintrag
     const dates = list.map(p => p.dateAdded).sort((a, b) => a - b);
     const oldest = new Date(dates[0]).toLocaleDateString();
-    const newest = new Date(dates[datas.length - 1]).toLocaleDateString();
+    const newest = new Date(dates[dates.length - 1]).toLocaleDateString();
     
     ChatLib.chat("&c[Shitterlist] &f&lStatistiken:");
     ChatLib.chat(`&7Gesamtanzahl: &c${list.length}`);
@@ -2234,72 +2282,3 @@ register("chat", (rawLine, event) => {
         }
     }
 }).setCriteria("${rawLine}");
-            if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Debounce verhindert Doppel-Kick (${joinType}) für ${playerName}`);
-            return;
-        }
-        autoKickSent[key] = now;
-        if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Leader (${leader}) kickt ${playerName} (${joinType})`);
-        sendKickAnnouncement(playerName, reason);
-        scheduleKick(playerName);
-    });
-}
-
-// Chat Event für Party/Dungeon Warnungen
-register("chat", (message) => {
-    if (!settings.enabled) return;
-    if (settings.debugMode) ChatLib.chat("&7[DEBUG] Chat message: " + message);
-
-    let joinType = null;
-    let detectedName = null;
-
-    const partyJoinMatch = message.match(/^(?:Party > )?(?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16}) joined the party\.$/);
-    if (partyJoinMatch && settings.partyWarnings) {
-        joinType = "party";
-        detectedName = partyJoinMatch[1];
-    }
-
-    if (!joinType && message.includes("joined the dungeon group!") && settings.dungeonWarnings) {
-        const dungeonMatch = message.match(/^(.+?) joined the dungeon group!/);
-        if (dungeonMatch) {
-            joinType = "dungeon";
-            detectedName = dungeonMatch[1].trim().replace(/^Party Finder > /, "");
-        }
-    }
-
-    if (joinType && detectedName) {
-        const playerName = detectedName;                       // Vereinheitlicht
-        // SELF-SUPPRESS: Wenn der Spieler selbst (der lokale Client) in der Liste ist und joint,
-        // dann soll SEIN Client keine Kick-Nachricht senden (sonst doppelt).
-        if (playerName.toLowerCase() === Player.getName().toLowerCase()) {
-            if (settings.debugMode) ChatLib.chat("&7[DEBUG] Eigenen (self) Join erkannt – keine AutoKick Nachricht");
-            return;
-        }
-
-        if (isShitter(playerName)) {
-            // Reason bestimmen
-            const info = getActivePlayerList().find(p => p.name.toLowerCase() === playerName.toLowerCase());
-            const reason = info ? (info.reason || "Unknown") : "Unknown";
-
-            // ALTEN Block entfernen/auskommentieren:
-            // if (settings.autoPartyKick && (joinType === "party" || joinType === "dungeon")) { ... }
-
-            // NEU: Leader-basierter AutoKick (ruft ensurePartyLeader → /p list)
-            if (joinType === "party" || joinType === "dungeon") {
-                attemptAutoKick(playerName, reason, joinType);
-            }
-
-            if (shouldShowWarning(playerName)) {
-                if (joinType === "party") {
-                    slLog("warning", `${playerName} ist ein bekannter Shitter! ${reason}`, "warning");
-                    displayTitleWarning(playerName, reason);
-                    if (settings.warningSound) World.playSound("note.pling", 1, 1);
-                } else {
-                    slLog("warning", `&c${playerName} &7ist im Dungeon-Team! Grund: &c${reason}`, "warning");
-                    displayTitleWarning(playerName, reason);
-                    if (settings.warningSound) World.playSound("note.pling", 1, 0.8);
-                }
-                playCustomJoinSound();
-            }
-        }
-    }
-}).setCriteria("${message}");
