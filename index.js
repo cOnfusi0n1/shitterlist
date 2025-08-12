@@ -2118,3 +2118,79 @@ register("gameUnload", () => {
         ChatLib.chat("&a[Shitterlist] &7Daten gespeichert");
     }
 });
+
+// === NEU: Suppression für /pl Ausgabe ===
+let suppressPartyListOutput = false;
+let partyListSuppressExpire = 0;
+
+function beginPartyListSuppression(ms = 2000) {
+    suppressPartyListOutput = true;
+    partyListSuppressExpire = Date.now() + ms;
+}
+
+// (falls noch nicht vorhanden) Leader-Handling Variablen:
+let partyLeader = null;
+let partyInfoPending = false;
+let partyInfoLastUpdate = 0;
+let partyInfoCallbacks = [];
+
+// Aktualisiere ensurePartyLeader (nur diesen Block ersetzen / erweitern)
+function ensurePartyLeader(cb) {
+    const now = Date.now();
+    if (partyLeader && (now - partyInfoLastUpdate) < 10000) {
+        return cb(partyLeader);
+    }
+    partyInfoCallbacks.push(cb);
+    if (partyInfoPending) return;
+
+    partyInfoPending = true;
+    beginPartyListSuppression(2000);        // NEU: Suppression aktivieren
+    ChatLib.command("pl");                  // /party list ausführen
+
+    const requestSentAt = Date.now();
+    setTimeout(() => {
+        if (partyInfoPending && (Date.now() - requestSentAt) >= 1400) {
+            partyInfoPending = false;
+            if (settings.debugMode) ChatLib.chat("&7[DEBUG] Party-Leader Anfrage Timeout");
+            suppressPartyListOutput = false;
+            const cbs = partyInfoCallbacks.slice(); partyInfoCallbacks = [];
+            cbs.forEach(f => f(partyLeader));
+        }
+    }, 1500);
+}
+
+// Entferne alten einfachen Listener für Party Leader und ersetze ihn durch diesen:
+register("chat", (line, event) => {
+    // Laufzeit der Suppression prüfen
+    if (suppressPartyListOutput && Date.now() > partyListSuppressExpire) {
+        suppressPartyListOutput = false;
+    }
+
+    // Party Leader extrahieren (muss passieren BEVOR wir evtl. cancel() rufen)
+    const m = line.match(/^Party Leader: (?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16})/);
+    if (m) {
+        partyLeader = m[1];
+        partyInfoLastUpdate = Date.now();
+        partyInfoPending = false;
+        if (settings.debugMode) ChatLib.chat("&7[DEBUG] Party-Leader erkannt: " + partyLeader);
+        // Suppression nach erfolgreichem Erkennen sofort beenden
+        suppressPartyListOutput = false;
+        const cbs = partyInfoCallbacks.slice(); partyInfoCallbacks = [];
+        partyInfoCallbacks = [];
+        cbs.forEach(f => f(partyLeader));
+    }
+
+    // Unterdrückbare Zeilen definieren
+    if (suppressPartyListOutput) {
+        if (
+            /^Party Leader: /.test(line) ||
+            /^Party Moderators?: /.test(line) ||
+            /^Party Members?: /.test(line) ||
+            /^Party Finder Queue: /.test(line) ||
+            /^You are not in a party\./.test(line)
+        ) {
+            cancel(event);
+            if (settings.debugMode) ChatLib.chat("&7[DEBUG] /pl Zeile unterdrückt");
+        }
+    }
+}).setCriteria("${line}");
