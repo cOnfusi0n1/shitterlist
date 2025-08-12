@@ -1626,8 +1626,6 @@ register("chat", (message) => {
             }
         }
     }
-    // ...existing code...
-
 }).setCriteria("${message}");
 
 // Hauptbefehl
@@ -2217,3 +2215,91 @@ register("chat", (rawLine, event) => {
         }
     }
 }).setCriteria("${rawLine}");
+
+// ...existing code (nach sendKickAnnouncement / scheduleKick, vor Chat-Events einfügen)...
+function attemptAutoKick(playerName, reason, joinType) {
+    if (!settings.autoPartyKick) return;
+    // Leader ermitteln (triggert /p list + Suppression)
+    ensurePartyLeader((leader) => {
+        if (!leader) {
+            if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Kein Leader ermittelt – Kick abgebrochen (${playerName})`);
+            return;
+        }
+        const amLeader = leader.toLowerCase() === Player.getName().toLowerCase();
+        if (!amLeader) {
+            if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Bin nicht Leader (${leader}) – Kick übersprungen für ${playerName}`);
+            return;
+        }
+        const key = playerName.toLowerCase();
+        const now = Date.now();
+        const lastTs = autoKickSent[key] || 0;
+        if (now - lastTs < 6000) {
+            if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Debounce verhindert Doppel-Kick (${joinType}) für ${playerName}`);
+            return;
+        }
+        autoKickSent[key] = now;
+        if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Leader (${leader}) kickt ${playerName} (${joinType})`);
+        sendKickAnnouncement(playerName, reason);
+        scheduleKick(playerName);
+    });
+}
+
+// Chat Event für Party/Dungeon Warnungen
+register("chat", (message) => {
+    if (!settings.enabled) return;
+    if (settings.debugMode) ChatLib.chat("&7[DEBUG] Chat message: " + message);
+
+    let joinType = null;
+    let detectedName = null;
+
+    const partyJoinMatch = message.match(/^(?:Party > )?(?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16}) joined the party\.$/);
+    if (partyJoinMatch && settings.partyWarnings) {
+        joinType = "party";
+        detectedName = partyJoinMatch[1];
+    }
+
+    if (!joinType && message.includes("joined the dungeon group!") && settings.dungeonWarnings) {
+        const dungeonMatch = message.match(/^(.+?) joined the dungeon group!/);
+        if (dungeonMatch) {
+            joinType = "dungeon";
+            detectedName = dungeonMatch[1].trim().replace(/^Party Finder > /, "");
+        }
+    }
+
+    if (joinType && detectedName) {
+        const playerName = detectedName;                       // Vereinheitlicht
+        // SELF-SUPPRESS: Wenn der Spieler selbst (der lokale Client) in der Liste ist und joint,
+        // dann soll SEIN Client keine Kick-Nachricht senden (sonst doppelt).
+        if (playerName.toLowerCase() === Player.getName().toLowerCase()) {
+            if (settings.debugMode) ChatLib.chat("&7[DEBUG] Eigenen (self) Join erkannt – keine AutoKick Nachricht");
+            return;
+        }
+
+        if (isShitter(playerName)) {
+            // Reason bestimmen
+            const info = getActivePlayerList().find(p => p.name.toLowerCase() === playerName.toLowerCase());
+            const reason = info ? (info.reason || "Unknown") : "Unknown";
+
+            // ALTEN Block entfernen/auskommentieren:
+            // if (settings.autoPartyKick && (joinType === "party" || joinType === "dungeon")) { ... }
+
+            // NEU: Leader-basierter AutoKick (ruft ensurePartyLeader → /p list)
+            if (joinType === "party" || joinType === "dungeon") {
+                attemptAutoKick(playerName, reason, joinType);
+            }
+
+            if (shouldShowWarning(playerName)) {
+                if (joinType === "party") {
+                    slLog("warning", `${playerName} ist ein bekannter Shitter! ${reason}`, "warning");
+                    displayTitleWarning(playerName, reason);
+                    if (settings.warningSound) World.playSound("note.pling", 1, 1);
+                } else {
+                    slLog("warning", `&c${playerName} &7ist im Dungeon-Team! Grund: &c${reason}`, "warning");
+                    displayTitleWarning(playerName, reason);
+                    if (settings.warningSound) World.playSound("note.pling", 1, 0.8);
+                }
+                playCustomJoinSound();
+            }
+        }
+    }
+}).setCriteria("${message}");
