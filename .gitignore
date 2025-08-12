@@ -1,0 +1,9 @@
+# Auszuschließende sensible/konfigurations Dateien
+config.toml
+settings.js
+.data.json
+
+# Node / allgemeine Artefakte (optional erg.)
+node_modules/
+.DS_Store
+*.log
