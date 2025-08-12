@@ -321,10 +321,10 @@ class Settings {
         name: "Prüfintervall (Min.)",
         description: "Intervall für automatische Update-Prüfung",
         category: "Updater",
-        min: 5,
-        max: 720
+        min: 1,
+        max: 60
     })
-    updateCheckInterval = 60;
+    updateCheckInterval = 5;
 
     @ButtonProperty({
         name: "Jetzt nach Updates suchen",
