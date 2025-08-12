@@ -1,6 +1,6 @@
 {
     "name": "Shitterlist",
-    "version": "1.2.11",
+    "version": "1.2.12",
     "description": "Automatische Shitter-Liste mit API & Auto-Updater",
     "creator": "cOnfusi0n1",
     "entry": "index.js",

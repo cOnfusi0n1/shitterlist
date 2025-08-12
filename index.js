@@ -2137,60 +2137,83 @@ let partyInfoCallbacks = [];
 // Aktualisiere ensurePartyLeader (nur diesen Block ersetzen / erweitern)
 function ensurePartyLeader(cb) {
     const now = Date.now();
+    // Cache 10s
     if (partyLeader && (now - partyInfoLastUpdate) < 10000) {
+        if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Leader Cache: ${partyLeader}`);
         return cb(partyLeader);
     }
     partyInfoCallbacks.push(cb);
     if (partyInfoPending) return;
 
     partyInfoPending = true;
-    beginPartyListSuppression(2000);        // NEU: Suppression aktivieren
-    ChatLib.command("pl");                  // /party list ausführen
+    beginPartyListSuppression(2000);
+    // WICHTIG: /p list (oder /party list) – /pl funktioniert auf Hypixel nicht für Party
+    if (settings.debugMode) ChatLib.chat("&7[DEBUG] Sende /p list für Leader-Ermittlung");
+    ChatLib.command("p list"); // alias von /party list
 
-    const requestSentAt = Date.now();
+    const sentAt = Date.now();
     setTimeout(() => {
-        if (partyInfoPending && (Date.now() - requestSentAt) >= 1400) {
+        if (partyInfoPending) {
             partyInfoPending = false;
-            if (settings.debugMode) ChatLib.chat("&7[DEBUG] Party-Leader Anfrage Timeout");
             suppressPartyListOutput = false;
+            if (settings.debugMode) ChatLib.chat("&7[DEBUG] Leader Timeout – keine Antwort");
             const cbs = partyInfoCallbacks.slice(); partyInfoCallbacks = [];
-            cbs.forEach(f => f(partyLeader));
+            cbs.forEach(f => f(partyLeader)); // kann null sein
         }
-    }, 1500);
+    }, 1600);
 }
 
-// Entferne alten einfachen Listener für Party Leader und ersetze ihn durch diesen:
-register("chat", (line, event) => {
-    // Laufzeit der Suppression prüfen
+// Verbesserter Listener für Party-List-Ausgabe
+register("chat", (rawLine, event) => {
+    // Prüfe Suppression Timeout
     if (suppressPartyListOutput && Date.now() > partyListSuppressExpire) {
         suppressPartyListOutput = false;
     }
 
-    // Party Leader extrahieren (muss passieren BEVOR wir evtl. cancel() rufen)
-    const m = line.match(/^Party Leader: (?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16})/);
-    if (m) {
-        partyLeader = m[1];
+    // Farbcodes entfernen
+    const line = rawLine.replace(/§./g, "").trim();
+
+    // Debug optional
+    if (partyInfoPending && settings.debugMode) {
+        ChatLib.chat("&8[PLDBG] " + line);
+    }
+
+    // Match Leader / Owner
+    const leaderMatch = line.match(/^Party (?:Leader|Owner): (?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16})$/);
+    if (leaderMatch) {
+        partyLeader = leaderMatch[1];
         partyInfoLastUpdate = Date.now();
         partyInfoPending = false;
-        if (settings.debugMode) ChatLib.chat("&7[DEBUG] Party-Leader erkannt: " + partyLeader);
-        // Suppression nach erfolgreichem Erkennen sofort beenden
         suppressPartyListOutput = false;
+        if (settings.debugMode) ChatLib.chat("&7[DEBUG] Party-Leader erkannt: " + partyLeader);
         const cbs = partyInfoCallbacks.slice(); partyInfoCallbacks = [];
         partyInfoCallbacks = [];
         cbs.forEach(f => f(partyLeader));
     }
 
-    // Unterdrückbare Zeilen definieren
+    // Optional: Wenn „You are not in a party.“ kommt -> kein Leader
+    if (/^You are not in a party\./.test(line)) {
+        partyLeader = null;
+        partyInfoLastUpdate = Date.now();
+        partyInfoPending = false;
+        suppressPartyListOutput = false;
+        if (settings.debugMode) ChatLib.chat("&7[DEBUG] Nicht in Party");
+        const cbs = partyInfoCallbacks.slice(); partyInfoCallbacks = [];
+        partyInfoCallbacks = [];
+        cbs.forEach(f => f(null));
+    }
+
+    // Unterdrückbare Zeilen (nur während Suppression)
     if (suppressPartyListOutput) {
         if (
-            /^Party Leader: /.test(line) ||
+            /^Party (?:Leader|Owner): /.test(line) ||
             /^Party Moderators?: /.test(line) ||
             /^Party Members?: /.test(line) ||
             /^Party Finder Queue: /.test(line) ||
             /^You are not in a party\./.test(line)
         ) {
             cancel(event);
-            if (settings.debugMode) ChatLib.chat("&7[DEBUG] /pl Zeile unterdrückt");
+            if (settings.debugMode) ChatLib.chat("&7[DEBUG] /p list Zeile unterdrückt");
         }
     }
-}).setCriteria("${line}");
+}).setCriteria("${rawLine}");
