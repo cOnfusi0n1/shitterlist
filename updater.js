@@ -69,4 +69,5 @@ export function triggerManualUpdateCheck(){ slInfo('Prüfe auf Updates...'); che
 
 export function startAutoUpdater(){ if(!settings.autoUpdaterEnabled) return; if(startAutoUpdater._reg) return; const mins=Math.max(1, settings.updateCheckInterval||5); startAutoUpdater._reg=register('step',()=>{ const now=Date.now(); if(now-state.lastCheck < mins*60*1000) return; if(state.checking) return; checkForUpdate(has=>{ if(has && settings.autoInstallUpdates) performSelfUpdate(true); }); }).setDelay(60); if(settings.debugMode) ChatLib.chat(formatMessage(`AutoUpdater aktiv – Intervall ${mins}m`, 'info')); }
 
-Object.assign(globalThis,{ performSelfUpdate, triggerManualUpdateCheck, startAutoUpdater, checkForUpdate });
+const __g_upd=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this);
+try { Object.assign(__g_upd,{ performSelfUpdate, triggerManualUpdateCheck, startAutoUpdater, checkForUpdate }); } catch(_) {}

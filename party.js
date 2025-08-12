@@ -67,4 +67,5 @@ register('chat',(msg)=>{
   }
 }).setCriteria('${msg}');
 
-Object.assign(globalThis,{ ensurePartyLeader, attemptAutoKick });
+const __g_party=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this);
+try { Object.assign(__g_party,{ ensurePartyLeader, attemptAutoKick }); } catch(_) {}

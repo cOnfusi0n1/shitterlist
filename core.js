@@ -27,5 +27,6 @@ export const API_ONLY = true; // adjust here if future toggle desired
 // ========= Utilities =========
 export function cleanPlayerName(name){ if(!name) return ''; let cleaned=name.replace(/§[0-9a-fk-or]/g,'').trim(); cleaned=cleaned.replace(/^\[[^\]]+\]\s*/,''); cleaned=cleaned.replace(/\s+[^\w].*$/,''); cleaned=cleaned.replace(/\s*\([^)]*\).*$/,''); cleaned=cleaned.replace(/[^\w\d_-]+.*$/,''); return cleaned.trim(); }
 
-// Expose for legacy compatibility
-Object.assign(globalThis,{ slLog, slInfo, slWarn, slSuccess, showApiSyncMessage, formatMessage, runAsync, safeCommand, API_ONLY, cleanPlayerName });
+// Expose for legacy compatibility (Rhino may not define globalThis)
+const __g = (typeof globalThis!=='undefined') ? globalThis : (typeof global!=='undefined' ? global : this);
+try { Object.assign(__g,{ slLog, slInfo, slWarn, slSuccess, showApiSyncMessage, formatMessage, runAsync, safeCommand, API_ONLY, cleanPlayerName }); } catch(_) {}

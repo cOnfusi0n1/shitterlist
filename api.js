@@ -39,4 +39,5 @@ export function apiAddShitterDirect(username, reason){ if(!settings.enableAPI ||
 export function apiRemoveShitterDirect(username){ if(!settings.enableAPI || !settings.apiUrl){ slWarn('API nicht konfiguriert'); return false;} const idx=apiPlayersCache.findIndex(p=>p.name.toLowerCase()===username.toLowerCase()); if(idx===-1) return false; const cached=apiPlayersCache.splice(idx,1)[0]; if(!cached.id){ return true; } runAsync('apiRemove',()=>{ makeAPIRequest(`/api/v1/players/${cached.id}`,'DELETE',null,(err,res)=>{ if(err||!res||!res.success){ slWarn('Remove Fehler – re-sync'); downloadFromAPI(()=>{}); } }); }); return true; }
 
 // Re-bind placeholders in data module (if loaded earlier)
-Object.assign(globalThis,{ apiData, makeAPIRequest, checkAPIStatus, downloadFromAPI, uploadToAPI, syncWithAPI, getAPIStatusColor, apiAddShitterDirect, apiRemoveShitterDirect });
+const __g_api=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this);
+try { Object.assign(__g_api,{ apiData, makeAPIRequest, checkAPIStatus, downloadFromAPI, uploadToAPI, syncWithAPI, getAPIStatusColor, apiAddShitterDirect, apiRemoveShitterDirect }); } catch(_) {}

@@ -53,8 +53,9 @@ export function exportShitterlist(){ try { const arr=getActivePlayerList(); File
 export function checkOnlineShitters(){ try { const tab=(TabList.getNames()||[]).map(n=>cleanPlayerName(n)).filter(Boolean); const list=getActivePlayerList(); const online=list.filter(p=>tab.some(t=>t.toLowerCase()===p.name.toLowerCase())); if(!online.length){ slInfo('Keine Shitter online'); return;} slWarn(`Online (${online.length}): ${online.map(o=>o.name).join(', ')}`); } catch(e){ slWarn('Online Check Fehler: '+e.message);} }
 export function getShitterStats(){ const list=getActivePlayerList(); if(!list.length){ slWarn('Keine Statistiken'); return; } const reasonStats={}; list.forEach(p=>{ reasonStats[p.reason]=(reasonStats[p.reason]||0)+1; }); const dates=list.map(p=>p.dateAdded).sort((a,b)=>a-b); const oldest=new Date(dates[0]).toLocaleDateString(); const newest=new Date(dates[dates.length-1]).toLocaleDateString(); ChatLib.chat('&c[Shitterlist] &f&lStatistiken:'); ChatLib.chat(`&7Gesamt: &c${list.length}`); ChatLib.chat(`&7Ältester: &7${oldest}`); ChatLib.chat(`&7Neuester: &7${newest}`); ChatLib.chat('&7Top Gründe:'); Object.entries(reasonStats).sort(([,a],[,b])=>b-a).slice(0,5).forEach(([r,c])=>ChatLib.chat(`&7• ${r}: &c${c}`)); }
 
-// Expose legacy globals
-Object.assign(globalThis,{ shitterData, apiPlayersCache, loadData, saveData, addShitter, removeShitter, clearList, getActivePlayerList, exportShitterlist, getRandomShitter, checkOnlineShitters, isShitter });
+// Expose legacy globals (Rhino safe)
+const __g_data=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this);
+try { Object.assign(__g_data,{ shitterData, apiPlayersCache, loadData, saveData, addShitter, removeShitter, clearList, getActivePlayerList, exportShitterlist, getRandomShitter, checkOnlineShitters, isShitter }); } catch(_) {}
 
 // Auto-load on module init
 loadData();

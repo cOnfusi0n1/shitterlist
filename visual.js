@@ -34,4 +34,5 @@ export function displayTitleWarning(playerName, reason) {
   try { Client.showTitle(title, subtitle, 10, 80, 20); if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Title gezeigt für &f${playerName}`); } catch (e) { slInfo('Title Fehler: ' + e.message); }
 }
 
-Object.assign(globalThis, { displayTitleWarning, playCustomJoinSound, playNotificationSound });
+const __g_visual=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this);
+try { Object.assign(__g_visual, { displayTitleWarning, playCustomJoinSound, playNotificationSound }); } catch(_) {}

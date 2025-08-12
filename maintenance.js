@@ -37,5 +37,6 @@ export function reclassAPIEntries(){ let changed=0; shitterData.players.forEach(
 // periodic every ~60s
 register('step',()=>{ autoBackupIfNeeded(); autoCleanupOldEntries(); }).setDelay(60);
 
-Object.assign(globalThis,{ getBreakdown, reclassAPIEntries });
+const __g_maint=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this);
+try { Object.assign(__g_maint,{ getBreakdown, reclassAPIEntries }); } catch(_) {}
 if(settings.debugMode) slInfo('Maintenance Modul aktiv');
