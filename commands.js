@@ -1,11 +1,11 @@
 // commands.js – SINGLE IMPLEMENTATION
 import { settings } from './settings';
-import { slLog, slInfo, slWarn, showApiSyncMessage } from './core';
-import { addShitter, removeShitter, isShitter, getRandomShitter, getShitterStats, checkOnlineShitters, exportShitterlist, clearList, getActivePlayerList } from './data';
-import { syncWithAPI, downloadFromAPI, uploadToAPI, getAPIStatusColor, apiData } from './api';
+import { slLog, slInfo, slWarn, showApiSyncMessage } from './utils/core';
+import { addShitter, removeShitter, isShitter, getRandomShitter, getShitterStats, checkOnlineShitters, exportShitterlist, clearList, getActivePlayerList } from './utils/data';
+import { syncWithAPI, downloadFromAPI, uploadToAPI, getAPIStatusColor, apiData } from './utils/api';
 import { performSelfUpdate, triggerManualUpdateCheck } from './updater';
-import { attemptAutoKick } from './party';
-import { cleanPlayerName } from './core';
+import { attemptAutoKick } from './utils/party';
+import { cleanPlayerName } from './utils/core';
 import { getBreakdown, reclassAPIEntries } from './maintenance';
 
 function addShitterWithCategory(username, category, reason){

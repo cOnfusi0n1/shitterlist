@@ -1,6 +1,6 @@
 // updater.js – SINGLE IMPLEMENTATION (Full multi-file updater)
 import { settings } from './settings';
-import { slInfo, slWarn, slSuccess, slLog, runAsync, formatMessage } from './core';
+import { slInfo, slWarn, slSuccess, slLog, runAsync, formatMessage } from './utils/core';
 
 const BASE='https://raw.githubusercontent.com/cOnfusi0n1/Shitterlist/main';
 // List of repo files to keep in sync (root of module folder)

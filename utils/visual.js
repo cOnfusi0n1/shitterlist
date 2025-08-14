@@ -1,5 +1,5 @@
 // visual.js – SINGLE IMPLEMENTATION (titles & sounds)
-import { settings } from './settings';
+import { settings } from '../settings';
 import { slInfo } from './core';
 
 // Notification sound helper

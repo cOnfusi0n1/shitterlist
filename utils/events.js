@@ -1,9 +1,9 @@
 // events.js – SINGLE IMPLEMENTATION: chat filter, auto sync, cooldown cleanup, unload save
-import { settings } from './settings';
+import { settings } from '../settings';
 import { getActivePlayerList, loadData, saveData, shitterData } from './data';
 import { syncWithAPI, apiData } from './api';
 import { slInfo } from './core';
-import { triggerManualUpdateCheck, startAutoUpdater } from './updater';
+import { triggerManualUpdateCheck, startAutoUpdater } from '../updater';
 import { attemptAutoKick } from './party';
 
 function isShitter(name){ return getActivePlayerList().some(p=>p.name.toLowerCase()===name.toLowerCase()); }

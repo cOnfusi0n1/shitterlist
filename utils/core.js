@@ -1,6 +1,6 @@
 // core.js – CLEAN SINGLE IMPLEMENTATION
 // Provides: logging, async helper, rate-limited command queue, utilities, constants
-import { settings } from './settings';
+import { settings } from '../settings';
 
 // ========= Logging =========
 function ts(){ return settings.showTimestamps ? `&7[${new Date().toLocaleTimeString()}] ` : ''; }

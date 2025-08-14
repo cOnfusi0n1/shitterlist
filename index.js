@@ -1,14 +1,14 @@
 // Shitterlist Loader – minimal. Alle Logik liegt in den Modul-Dateien.
 import './settings';
-import './core';
-import './data';
-import './api';
+import './utils/core';
+import './utils/data';
+import './utils/api';
 import './updater';
-import './visual';
-import './party';
+import './utils/visual';
+import './utils/party';
 import './maintenance';
 import './commands';
-import './events';
+import './utils/events';
 
 try { ChatLib.chat('&7[Shitterlist] &fModule geladen'); } catch(_) {}
 

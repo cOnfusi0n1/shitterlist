@@ -1,6 +1,6 @@
 // data.js – SINGLE CONSOLIDATED IMPLEMENTATION
 // Provides: shitterData, apiPlayersCache, CRUD, utility queries & stats
-import { settings } from './settings';
+import { settings } from '../settings';
 import { API_ONLY, slInfo, slSuccess, slWarn, cleanPlayerName, showApiSyncMessage } from './core';
 
 // Persistent structure (extended fields kept for compatibility)

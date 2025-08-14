@@ -1,5 +1,5 @@
 // party.js – SINGLE IMPLEMENTATION: party leader detection & auto kick warnings
-import { settings } from './settings';
+import { settings } from '../settings';
 import { safeCommand } from './core';
 import { getActivePlayerList, isShitter as dataIsShitter } from './data';
 import { sendWebhook } from './api';

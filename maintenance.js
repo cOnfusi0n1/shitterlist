@@ -1,7 +1,7 @@
 // maintenance.js – SINGLE IMPLEMENTATION: backup, cleanup, diagnostics
 import { settings } from './settings';
-import { shitterData, saveData } from './data';
-import { slInfo } from './core';
+import { shitterData, saveData } from './utils/data';
+import { slInfo } from './utils/core';
 
 const DAY_MS=86400000;
 

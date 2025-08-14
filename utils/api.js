@@ -1,5 +1,5 @@
 // api.js – SINGLE IMPLEMENTATION (requests, sync, placeholders for direct add/remove)
-import { settings } from './settings';
+import { settings } from '../settings';
 import { API_ONLY, runAsync, slWarn, slInfo, slSuccess, showApiSyncMessage } from './core';
 import { shitterData, apiPlayersCache, saveData, apiAddShitterDirect as placeAdd, apiRemoveShitterDirect as placeRemove } from './data';
 
