@@ -12,4 +12,3 @@ import './utils/events';
 
 try { ChatLib.chat('&7[Shitterlist] &fModule geladen'); } catch(_) {}
 
-// Kein weiterer Code hier – vermeidet doppelte Event- & Command-Registrierungen.

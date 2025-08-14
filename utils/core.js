@@ -17,8 +17,37 @@ export const showApiSyncMessage=(m,t='info')=>slLog('api',m,t);
 let __asyncInit=false, __Thread, __Runnable; export function runAsync(label,fn){ try{ if(!__asyncInit){ __Thread=Java.type('java.lang.Thread'); __Runnable=Java.type('java.lang.Runnable'); __asyncInit=true; } new __Thread(new __Runnable({ run(){ try{ fn(); }catch(e){ if(settings.debugMode) slWarn(`[Async ${label}] ${e}`); } } })).start(); }catch(e){ try{ fn(); }catch(_){} } }
 
 // ========= Rate‑limited Command Queue =========
-const COMMAND_DELAY_MS = 650; const __queue=[]; let __last=0; export function safeCommand(cmd){ if(!cmd) return; __queue.push(cmd); }
-register('tick',()=>{ if(!__queue.length) return; const now=Date.now(); if(now-__last<COMMAND_DELAY_MS) return; const next=__queue.shift(); if(settings.debugMode) ChatLib.chat(`&8[CMD] /${next}`); try{ ChatLib.command(next,true);}catch(e){ if(settings.debugMode) slWarn('Cmd Fehler: '+e.message); } __last=now; });
+const COMMAND_DELAY_MS = 1200; // higher to satisfy server cooldowns and avoid 'slow down'
+const __queue=[]; let __last=0;
+export function safeCommand(cmd){ if(!cmd) return; __queue.push(cmd); }
+// Send a command immediately (bypasses queue) – use sparingly
+export function sendCommandNow(cmd){
+	if(!cmd) return;
+	try{
+		if(settings.debugMode) ChatLib.chat(`&8[CMD:NOW] /${cmd}`);
+		// Primary path
+		ChatLib.say('/'+cmd);
+	}catch(e){
+		try{ ChatLib.command(cmd,true); }catch(e2){ if(settings.debugMode) slWarn('CmdNow Fehler (fallback): '+e2.message); }
+		if(settings.debugMode) slWarn('CmdNow Fehler: '+e.message);
+	}
+}
+register('tick',()=>{
+	if(!__queue.length) return;
+	const now=Date.now();
+	if(now-__last<COMMAND_DELAY_MS) return;
+	const next=__queue.shift();
+	if(settings.debugMode) ChatLib.chat(`&8[CMD] /${next}`);
+		try{
+			// Primary path: send to server as raw chat message with leading slash
+			ChatLib.say('/'+next);
+		}catch(e){
+			// Fallback path: attempt ChatLib.command if say failed
+			try{ ChatLib.command(next,true); }catch(e2){ if(settings.debugMode) slWarn('Cmd Fehler (fallback): '+e2.message); }
+			if(settings.debugMode) slWarn('Cmd Fehler: '+e.message);
+		}
+	__last=now;
+});
 
 // ========= Constants =========
 // Permanent API_ONLY Modus (lokale Liste wird nicht persistiert bei aktivierter API-only Strategie)
