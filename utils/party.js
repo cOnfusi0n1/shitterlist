@@ -69,7 +69,7 @@ export function attemptAutoKick(playerName, reason, joinType){
   // If we already know we're not leader, stop immediately
   if(partyLeader && partyLeader.toLowerCase()!==meL) return;
   kickInFlight[key]=Date.now();
-  const finalize=()=>{ setTimeout(()=>{ delete kickInFlight[key]; }, 6000); };
+  const finalize=()=>{ try{ delete kickInFlight[key]; }catch(_){} };
   resolveLeaderOnce(leader=>{
     if(!partyActive){ finalize(); return; }
     if(!leader || leader.toLowerCase()!==meL){ finalize(); return; }
@@ -78,7 +78,7 @@ export function attemptAutoKick(playerName, reason, joinType){
     setTimeout(()=>{
       if(!partyActive || recentlyRemoved[key]){ finalize(); return; }
       safeCommand(`pc Kicking ${playerName} - Reason: ${reason||'Unknown'}`);
-      setTimeout(()=>{ if(partyActive && !recentlyRemoved[key]) safeCommand(`p kick ${playerName}`); finalize(); }, 1100);
+  setTimeout(()=>{ if(partyActive && !recentlyRemoved[key]) safeCommand(`p kick ${playerName}`); finalize(); }, 1100);
     }, 500);
   });
 }
@@ -131,14 +131,7 @@ register('chat',(rawLine,event)=>{
     const rm=line.match(/^(?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16}) has been removed from the party/);
     if(rm){ recentlyRemoved[rm[1].toLowerCase()] = Date.now(); }
   }
-  // Disband variants: system or player action
-  if(/^The party was disbanded/.test(line) ||
-     /^Die (?:Party|Gruppe) wurde aufgelöst/i.test(line) ||
-     /has disbanded the party!?$/i.test(line)){
-    partyActive=false; clearTransientPartyCaches();
-  }
-  // If you were kicked from the party, you're no longer in one
-  if(/^You have been kicked from the party by /i.test(line) || /^Du wurdest von .* aus der Party entfernt/i.test(line)){
+  if(/^The party was disbanded/.test(line) || /^Die (?:Party|Gruppe) wurde aufgelöst/i.test(line)){
     partyActive=false; clearTransientPartyCaches();
   }
   if(/^You have joined \[.*?\] .*?'s party\.?$/.test(line) || /^You have created a party\.?$/.test(line)){
