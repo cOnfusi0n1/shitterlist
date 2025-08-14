@@ -66,18 +66,6 @@ function fetchAllFiles(list, cb){
 		fetchWithAliases(f,(err,content)=>{
 			if(err||!content){ if(settings.debugMode) slWarn('Fetch Fehler: '+f); results[f]=null; }
 			else {
-				// Sanitize settings.js for ChatTriggers compatibility
-			if(f==='settings.js'){
-					try{
-						content=content.replace(/import\s*\{\s*@Vigilant/g,'import { Vigilant')
-													 .replace(/,\s*@SwitchProperty/g,', SwitchProperty')
-													 .replace(/,\s*@SliderProperty/g,', SliderProperty')
-													 .replace(/,\s*@TextProperty/g,', TextProperty')
-													 .replace(/,\s*@ButtonProperty/g,', ButtonProperty')
-													 .replace(/,\s*@CheckboxProperty/g,', CheckboxProperty')
-													 .replace(/\/\/\/\s*<reference[^\n]*\n?/g,'');
-					}catch(_){}
-				}
 				results[f]=content;
 			}
 			if(--remaining===0 && !failed) cb(results);

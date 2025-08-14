@@ -100,7 +100,7 @@ register('command', (...args)=>{
     case 'checkupdate': triggerManualUpdateCheck(); break;
     default: ChatLib.chat('&c[Shitterlist] &fUnbekannter Befehl. /sl');
   }
-}).setName('shitterlist').setAliases(['sl']);
+}).setName('shitterlist').setAliases('sl help');
 
-register('command',()=>settings.openGUI()).setName('slconfig').setAliases(['shitterlistconfig','slgui']);
+register('command',()=>settings.openGUI()).setName('slconfig').setAliases('shitterlistconfig','slgui','sl');
 register('command',()=>{ ChatLib.chat('&a[Shitterlist] &fModul ist geladen und funktionsfähig!'); ChatLib.chat('&7Verwende /slconfig für Settings'); }).setName('sltest');
