@@ -62,8 +62,7 @@ export function attemptAutoKick(playerName, reason, joinType){
   if(!settings.autoPartyKick) return;
   const key=playerName.toLowerCase(); const now=Date.now();
   if(!partyActive) return; // don't attempt if not in a party
-  if(recentlyRemoved[key] && now-recentlyRemoved[key] < 5000) return; // already handled
-  if(autoKickSent[key] && now-autoKickSent[key]<7000) return; // stronger debounce
+  if(recentlyRemoved[key] && now-recentlyRemoved[key] < 1000) return; // tiny guard to avoid duplicate same-event kicks
   if(kickInFlight[key]) return; // prevent duplicate flows
   const me=Player.getName(); const meL=me.toLowerCase();
   // If we already know we're not leader, stop immediately
@@ -73,7 +72,6 @@ export function attemptAutoKick(playerName, reason, joinType){
   resolveLeaderOnce(leader=>{
     if(!partyActive){ finalize(); return; }
     if(!leader || leader.toLowerCase()!==meL){ finalize(); return; }
-    autoKickSent[key]=Date.now();
     // Let the leader line settle, then send message, then kick
     setTimeout(()=>{
       if(!partyActive || recentlyRemoved[key]){ finalize(); return; }
@@ -88,7 +86,7 @@ function shouldShowWarning(){ return settings.showJoinWarnings; }
 function processDetection(player, type){
   const key=player.toLowerCase();
   const now=Date.now();
-  if(detectedRecently[key] && now-detectedRecently[key]<4000) return; // debounce
+  if(detectedRecently[key] && now-detectedRecently[key]<800) return; // short debounce for duplicate same-event lines
   detectedRecently[key]=now;
   const list=getActivePlayerList();
   const info=list.find(p=>p.name.toLowerCase()===player.toLowerCase()) || { reason: 'Unknown' };
@@ -156,7 +154,17 @@ register('chat',(msg)=>{
     const d=plain.match(/^(?:Party Finder > )?(?:\[[^\]]+\]\s*)?(.+?) (?:has )?joined the dungeon group!$/);
     if(d){ player=d[1].trim(); type='dungeon'; }
   }
-  if(type){ partyActive=true; }
+  if(type){
+    partyActive=true;
+    // Player rejoined: clear stale flags so we can kick immediately again
+    try{
+      const k = player.toLowerCase();
+      delete recentlyRemoved[k];
+      delete detectedRecently[k];
+      delete autoKickSent[k];
+      delete kickInFlight[k];
+    }catch(_){ }
+  }
   if(!player) return;
   if(player.toLowerCase()===Player.getName().toLowerCase()) return;
   // Trigger cache load if needed in API_ONLY mode via data.isShitter side-effect
