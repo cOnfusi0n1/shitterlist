@@ -131,7 +131,14 @@ register('chat',(rawLine,event)=>{
     const rm=line.match(/^(?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16}) has been removed from the party/);
     if(rm){ recentlyRemoved[rm[1].toLowerCase()] = Date.now(); }
   }
-  if(/^The party was disbanded/.test(line) || /^Die (?:Party|Gruppe) wurde aufgelöst/i.test(line)){
+  // Disband variants: system or player action
+  if(/^The party was disbanded/.test(line) ||
+     /^Die (?:Party|Gruppe) wurde aufgelöst/i.test(line) ||
+     /has disbanded the party!?$/i.test(line)){
+    partyActive=false; clearTransientPartyCaches();
+  }
+  // If you were kicked from the party, you're no longer in one
+  if(/^You have been kicked from the party by /i.test(line) || /^Du wurdest von .* aus der Party entfernt/i.test(line)){
     partyActive=false; clearTransientPartyCaches();
   }
   if(/^You have joined \[.*?\] .*?'s party\.?$/.test(line) || /^You have created a party\.?$/.test(line)){
