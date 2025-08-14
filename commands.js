@@ -52,7 +52,30 @@ register('command', (...args)=>{
       break; }
     case 'remove': if(args.length<2){ ChatLib.chat('&c[Shitterlist] &fUsage: /sl remove <username>'); return; } removeShitter(args[1]); break;
     case 'check': if(args.length<2){ ChatLib.chat('&c[Shitterlist] &fUsage: /sl check <username>'); return;} const info=getActivePlayerList().find(p=>p.name.toLowerCase()===args[1].toLowerCase()); if(info){ ChatLib.chat(`&c[Shitterlist] &f${args[1]} ist ein Shitter`); ChatLib.chat(`&7Grund: &c${info.reason||'Unknown'}`);} else ChatLib.chat(`&a[Shitterlist] &f${args[1]} ist nicht in der Liste`); break;
-    case 'list': { const list=getActivePlayerList(); const pageSize=10; const pageArg=args[1]; const totalPages=Math.max(1, Math.ceil(list.length/pageSize)); let page=parseInt(pageArg||'1'); if(isNaN(page)||page<1) page=1; if(page>totalPages) page=totalPages; slLog('general',`Shitter (${list.length}) Seite ${page}/${totalPages}:`,'info'); if(!list.length){ ChatLib.chat('&7Keine Shitter in der Liste'); return;} const start=(page-1)*pageSize; list.slice(start,start+pageSize).forEach(pl=>ChatLib.chat(`&c#${pl.id||'?'} &f${pl.name} &7- ${pl.reason}`)); break; }
+    case 'list': {
+      const list=getActivePlayerList();
+      const pageSize=10; const pageArg=args[1];
+      const totalPages=Math.max(1, Math.ceil(list.length/pageSize));
+      let page=parseInt(pageArg||'1'); if(isNaN(page)||page<1) page=1; if(page>totalPages) page=totalPages;
+      slLog('general',`Shitter (${list.length}) Seite ${page}/${totalPages}:`,'info');
+      if(!list.length){ ChatLib.chat('&7Keine Shitter in der Liste'); return; }
+      const start=(page-1)*pageSize;
+      list.slice(start,start+pageSize).forEach(pl=>ChatLib.chat(`&c#${pl.id||'?'} &f${pl.name} &7- ${pl.reason}`));
+      // Navigation (hover + click)
+      if(totalPages>1){
+        try {
+          const comps=[];
+          if(page>1){
+            comps.push(new TextComponent('&c[< Zurück] ').setHover('show_text', `&cVorherige Seite (${page-1}/${totalPages})`).setClick('run_command', `/sl list ${page-1}`));
+          }
+            if(page<totalPages){
+            comps.push(new TextComponent('&a[Weiter >]').setHover('show_text', `&aNächste Seite (${page+1}/${totalPages})`).setClick('run_command', `/sl list ${page+1}`));
+          }
+          if(comps.length){ ChatLib.chat(new Message(...comps)); }
+        } catch(e){ if(settings.debugMode) ChatLib.chat('&7[DEBUG] Nav Error: '+e.message); }
+      }
+      break;
+    }
     case 'search': if(args.length<2){ ChatLib.chat('&c[Shitterlist] &fUsage: /sl search <term>'); return;} { const term=args.slice(1).join(' '); const matches=getActivePlayerList().filter(p=>p.name.toLowerCase().includes(term.toLowerCase())|| (p.reason||'').toLowerCase().includes(term.toLowerCase())); if(!matches.length){ ChatLib.chat(`&c[Shitterlist] &fKeine Treffer für "${term}"`); return;} ChatLib.chat(`&a[Shitterlist] &fSuchergebnisse (${matches.length}):`); matches.forEach(p=>ChatLib.chat(`&c• ${p.name} &7(${p.reason})`)); } break;
     case 'random': getRandomShitter(); break;
     case 'stats': getShitterStats(); break;

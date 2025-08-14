@@ -2,7 +2,6 @@
 // Provides: shitterData, apiPlayersCache, CRUD, utility queries & stats
 import { settings } from './settings';
 import { API_ONLY, slInfo, slSuccess, slWarn, cleanPlayerName, showApiSyncMessage } from './core';
-import { downloadFromAPI } from './api';
 
 // Persistent structure (extended fields kept for compatibility)
 export let shitterData = { players: [], version:'1.2.1', warningCooldowns:{}, lastBackup:0, lastSync:0 };
@@ -16,7 +15,8 @@ export function loadData(){
     if(raw){ const parsed=JSON.parse(raw); shitterData = Object.assign({}, shitterData, parsed, { players: (parsed.players||[]) }); }
     if(API_ONLY){
       slInfo('API-Only Modus – initialer API Download...');
-      if(settings.enableAPI && settings.apiUrl) setTimeout(()=>downloadFromAPI(()=>{}), 500);
+      const __g=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this);
+      if(settings.enableAPI && settings.apiUrl && __g.downloadFromAPI) setTimeout(()=>__g.downloadFromAPI(()=>{}), 500);
     } else {
       slSuccess(`${shitterData.players.length} Spieler geladen`);
     }
@@ -33,7 +33,13 @@ export function apiRemoveShitterDirect(){ return false; }
 
 export function addShitter(username, reason='Manual'){
   if(!username) return null;
-  if(API_ONLY) return apiAddShitterDirect(username, reason);
+  if(API_ONLY){
+    const __g=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this);
+    const fn=__g.apiAddShitterDirect||apiAddShitterDirect; // fallback to placeholder
+    const res=fn(username, reason);
+    if(!res) slWarn(`API Add fehlgeschlagen oder bereits vorhanden: ${username}`); else slInfo(`API Add ausstehend: ${username}`);
+    return res;
+  }
   const cleaned = cleanPlayerName(username);
   const existing = shitterData.players.find(p=>normName(p.name)===normName(cleaned));
   if(existing){ if(reason && reason!==existing.reason){ existing.reason=reason; existing.updatedAt=Date.now(); saveData(); slSuccess(`Aktualisiert: ${cleaned}`);} return existing; }
@@ -42,11 +48,11 @@ export function addShitter(username, reason='Manual'){
   shitterData.players.push(entry); saveData(); slSuccess(`Hinzugefügt: ${cleaned}`); return entry;
 }
 
-export function removeShitter(username){ if(!username) return false; if(API_ONLY) return apiRemoveShitterDirect(username); const before=shitterData.players.length; const target=normName(username); shitterData.players = shitterData.players.filter(p=>normName(p.name)!==target); const removed = before!==shitterData.players.length; if(removed){ saveData(); slSuccess(`${username} entfernt`);} else slWarn(`${username} nicht gefunden`); return removed; }
+export function removeShitter(username){ if(!username) return false; if(API_ONLY){ const __g=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this); const fn=__g.apiRemoveShitterDirect||apiRemoveShitterDirect; const ok=fn(username); if(ok) slSuccess(`${username} (API) entfernt`); else slWarn(`${username} nicht in API Cache`); return ok; } const before=shitterData.players.length; const target=normName(username); shitterData.players = shitterData.players.filter(p=>normName(p.name)!==target); const removed = before!==shitterData.players.length; if(removed){ saveData(); slSuccess(`${username} entfernt`);} else slWarn(`${username} nicht gefunden`); return removed; }
 
 export function clearList(){ if(API_ONLY){ slWarn('API-Only: kein lokales Löschen'); return; } shitterData.players=[]; saveData(); slSuccess('Liste geleert'); }
 
-export function isShitter(username){ if(!username) return false; const clean=cleanPlayerName(username); const list=getActivePlayerList(); if(API_ONLY && list.length===0 && settings.enableAPI && settings.apiUrl){ if(!isShitter._pending || Date.now()-isShitter._pending>3000){ isShitter._pending=Date.now(); showApiSyncMessage('Cache leer – lade API...','info'); downloadFromAPI(()=>{}); } } return list.some(p=>p.name.toLowerCase()===clean.toLowerCase()); }
+export function isShitter(username){ if(!username) return false; const clean=cleanPlayerName(username); const list=getActivePlayerList(); if(API_ONLY && list.length===0 && settings.enableAPI && settings.apiUrl){ if(!isShitter._pending || Date.now()-isShitter._pending>3000){ isShitter._pending=Date.now(); showApiSyncMessage('Cache leer – lade API...','info'); const __g=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this); if(__g.downloadFromAPI) __g.downloadFromAPI(()=>{}); } } return list.some(p=>p.name.toLowerCase()===clean.toLowerCase()); }
 
 export function getRandomShitter(){ const list=getActivePlayerList(); if(!list.length){ slWarn('Liste leer'); return null; } const p=list[Math.floor(Math.random()*list.length)]; slInfo(`Random: &c${p.name} &7(${p.reason})`); return p; }
 export function exportShitterlist(){ try { const arr=getActivePlayerList(); FileLib.write('Shitterlist','shitterlist_export.json', JSON.stringify(arr,null,2)); slSuccess(`Export (${arr.length}) erstellt`);} catch(e){ slWarn('Export Fehler: '+e.message);} }

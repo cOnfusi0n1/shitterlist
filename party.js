@@ -1,7 +1,8 @@
 // party.js – SINGLE IMPLEMENTATION: party leader detection & auto kick warnings
 import { settings } from './settings';
 import { safeCommand } from './core';
-import { getActivePlayerList } from './data';
+import { getActivePlayerList, isShitter as dataIsShitter } from './data';
+import { sendWebhook } from './api';
 import { displayTitleWarning, playCustomJoinSound } from './visual';
 
 const autoKickSent={};
@@ -51,20 +52,33 @@ register('chat',(rawLine,event)=>{
 register('chat',(msg)=>{
   if(!settings.enabled) return;
   let type=null, player=null;
-  const partyJoin=msg.match(/^(?:Party > )?(?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16}) joined the party\.$/);
+  // Normalize color codes
+  const plain = msg.replace(/§[0-9a-fk-or]/g,'');
+  // Match various party join formats (with rank, no rank, Party > prefix)
+  const partyJoin=plain.match(/^(?:Party > )?(?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16}) joined the party\.$/);
   if(partyJoin && settings.partyWarnings){ type='party'; player=partyJoin[1]; }
-  if(!type && msg.includes('joined the dungeon group!') && settings.dungeonWarnings){ const d=msg.match(/^(.+?) joined the dungeon group!/); if(d){ player=d[1].replace(/^Party Finder > /,'').trim(); type='dungeon'; } }
+  if(!type && plain.includes('joined the dungeon group!') && settings.dungeonWarnings){ const d=plain.match(/^(?:Party Finder > )?(.+?) joined the dungeon group!/); if(d){ player=d[1].trim(); type='dungeon'; } }
   if(!player) return;
   if(player.toLowerCase()===Player.getName().toLowerCase()) return;
+  // Trigger cache load if needed in API_ONLY mode via data.isShitter side-effect
+  const isShit = dataIsShitter(player);
+  if(!isShit) return;
   const list=getActivePlayerList();
   const info=list.find(p=>p.name.toLowerCase()===player.toLowerCase());
-  if(!info) return;
   attemptAutoKick(player, info.reason, type);
   if(shouldShowWarning()){
     ChatLib.chat(`&c[Shitterlist] &f${player} &7(${info.reason})`);
     displayTitleWarning(player, info.reason);
     playCustomJoinSound();
   }
+  // Optional webhook notification for detections
+  try{
+    if(settings.enableWebhook && settings.webhookSendDetections){
+      const reasonTxt = info && info.reason ? info.reason : 'Unknown';
+      const kind = type==='dungeon' ? 'Dungeon' : 'Party';
+      sendWebhook(`🚨 ${kind} Detection: **${player}** (${reasonTxt})`);
+    }
+  }catch(_){}
 }).setCriteria('${msg}');
 
 const __g_party=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this);
