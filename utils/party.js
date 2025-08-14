@@ -66,8 +66,12 @@ export function attemptAutoKick(playerName, reason, joinType){
     if(!partyActive){ finalize(); return; }
     if(!leader || leader.toLowerCase()!==meL){ finalize(); return; }
     autoKickSent[key]=Date.now();
-  safeCommand(`pc Kicking ${playerName} - Reason: ${reason||'Unknown'}`);
-    setTimeout(()=>{ if(partyActive && !recentlyRemoved[key]) safeCommand(`p kick ${playerName}`); finalize(); }, 900);
+    // Let the leader line settle, then send message, then kick
+    setTimeout(()=>{
+      if(!partyActive || recentlyRemoved[key]){ finalize(); return; }
+      safeCommand(`pc Kicking ${playerName} - Reason: ${reason||'Unknown'}`);
+      setTimeout(()=>{ if(partyActive && !recentlyRemoved[key]) safeCommand(`p kick ${playerName}`); finalize(); }, 1100);
+    }, 500);
   });
 }
 

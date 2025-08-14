@@ -27,8 +27,10 @@ export function sendCommandNow(cmd){
 		if(settings.debugMode) ChatLib.chat(`&8[CMD:NOW] /${cmd}`);
 		// Primary path
 		ChatLib.say('/'+cmd);
+	// Bump queue timer so subsequent queued commands respect spacing
+	try{ __last = Date.now(); }catch(_){}
 	}catch(e){
-		try{ ChatLib.command(cmd,true); }catch(e2){ if(settings.debugMode) slWarn('CmdNow Fehler (fallback): '+e2.message); }
+	try{ ChatLib.command(cmd,true); try{ __last = Date.now(); }catch(_){} }catch(e2){ if(settings.debugMode) slWarn('CmdNow Fehler (fallback): '+e2.message); }
 		if(settings.debugMode) slWarn('CmdNow Fehler: '+e.message);
 	}
 }

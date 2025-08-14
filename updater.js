@@ -76,7 +76,7 @@ function fetchAllFiles(list, cb){
 export function performSelfUpdate(force=false, cb){
 	checkForUpdate((has, remoteMetaContent, localV, remoteV)=>{
 		if(!force && !has){ slInfo(`Kein Update (${localV||'?'})`); cb&&cb(false); return; }
-		slInfo(`Starte Update auf Version ${remoteV||'?'} - lade Dateien...`);
+		slInfo(`Starte Update auf Version ${remoteV||'?'}`);
 		fetchAllFiles(FILES,(filesMap)=>{
 			let written=0, changed=0;
 			try {
@@ -89,7 +89,7 @@ export function performSelfUpdate(force=false, cb){
 				if(remoteMetaContent && !filesMap['metadata.json']){ // falls metadata nicht im loop (sollte sein)
 					FileLib.write('Shitterlist','metadata.json',remoteMetaContent);
 				}
-				slSuccess(`Update fertig (${localV||'?'} -> ${remoteV||'?'}), ${changed} Dateien geändert. Reload...`);
+				slSuccess(`Update abgeschlossen, Reload...`);
 				setTimeout(()=>ChatLib.command('ct load',true), 750);
 				cb&&cb(true);
 			} catch(e){ slWarn('Update Fehler: '+e.message); cb&&cb(false); }
@@ -97,7 +97,25 @@ export function performSelfUpdate(force=false, cb){
 	});
 }
 
-export function triggerManualUpdateCheck(){ slInfo('Prüfe auf Updates...'); checkForUpdate(has=>{ if(has){ slLog('general','Update verfügbar: /sl update-now','info'); } else slInfo('Aktuell'); }); }
+export function triggerManualUpdateCheck(){
+	slInfo('Prüfe auf Updates...');
+	checkForUpdate((has, _meta, localV, remoteV)=>{
+		if(has){
+			try {
+				const label = `&a[Update verfügbar: ${localV||'?'} -> ${remoteV||'?'}]`;
+				const hover = `&aKlicken zum Installieren\n&7Aktuell: &f${localV||'?'}\n&7Neu: &f${remoteV||'?'}`;
+				const btn = new TextComponent(label)
+					.setHover('show_text', hover)
+					.setClick('run_command', '/sl update-now');
+				ChatLib.chat(new Message(btn));
+			} catch(e){
+				slLog('general',`Update verfügbar (${localV||'?'} -> ${remoteV||'?'}): /sl update-now`,'info');
+			}
+		} else {
+			slInfo(`Aktuell (${localV||'?'})`);
+		}
+	});
+}
 
 export function startAutoUpdater(){ if(!settings.autoUpdaterEnabled) return; if(startAutoUpdater._reg) return; const mins=Math.max(1, settings.updateCheckInterval||5); startAutoUpdater._reg=register('step',()=>{ const now=Date.now(); if(now-state.lastCheck < mins*60*1000) return; if(state.checking) return; checkForUpdate(has=>{ if(has && settings.autoInstallUpdates) performSelfUpdate(true); }); }).setDelay(60); if(settings.debugMode) ChatLib.chat(formatMessage(`AutoUpdater aktiv – Intervall ${mins}m`, 'info')); }
 
