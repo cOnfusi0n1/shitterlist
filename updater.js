@@ -3,9 +3,10 @@ import { settings } from './settings';
 import { slInfo, slWarn, slSuccess, slLog, runAsync, formatMessage } from './utils/core';
 
 const BASE='https://raw.githubusercontent.com/cOnfusi0n1/Shitterlist/main';
-// List of repo files to keep in sync (root of module folder)
+// List of repo files to keep in sync (match current local structure)
 const FILES=[
-	'index.js','core.js','data.js','api.js','updater.js','visual.js','party.js','maintenance.js','commands.js','events.js','settings.js','metadata.json'
+	'index.js','updater.js','maintenance.js','commands.js','settings.js','metadata.json',
+	'utils/core.js','utils/data.js','utils/api.js','utils/visual.js','utils/party.js','utils/events.js'
 ];
 const META_FILE='metadata.json';
 let state={ lastCheck:0, checking:false };
@@ -14,7 +15,15 @@ function fetchTxt(url,cb){ runAsync('updFetch',()=>{ try{ const URL=Java.type('j
 
 // Alternate remote locations for certain files (handles repo structure changes)
 const FILE_ALIASES={
-	'settings.js': ['Shitterlist/settings.js']
+	// Settings might live under a folder in remote repo
+	'settings.js': ['Shitterlist/settings.js'],
+	// In case remote still has old flat layout
+	'utils/core.js': ['core.js'],
+	'utils/data.js': ['data.js'],
+	'utils/api.js': ['api.js'],
+	'utils/visual.js': ['visual.js'],
+	'utils/party.js': ['party.js'],
+	'utils/events.js': ['events.js']
 };
 
 function fetchWithAliases(name, cb){
@@ -58,7 +67,7 @@ function fetchAllFiles(list, cb){
 			if(err||!content){ if(settings.debugMode) slWarn('Fetch Fehler: '+f); results[f]=null; }
 			else {
 				// Sanitize settings.js for ChatTriggers compatibility
-				if(f==='settings.js'){
+			if(f==='settings.js'){
 					try{
 						content=content.replace(/import\s*\{\s*@Vigilant/g,'import { Vigilant')
 													 .replace(/,\s*@SwitchProperty/g,', SwitchProperty')
