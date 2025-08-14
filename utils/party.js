@@ -91,10 +91,14 @@ function processDetection(player, type){
   const list=getActivePlayerList();
   const info=list.find(p=>p.name.toLowerCase()===player.toLowerCase()) || { reason: 'Unknown' };
   attemptAutoKick(player, info.reason, type);
-  if(shouldShowWarning()){
+  const showChat = shouldShowWarning();
+  if(showChat){
     ChatLib.chat(`&c[Shitterlist] &f${player} &7(${info.reason})`);
     displayTitleWarning(player, info.reason);
     playCustomJoinSound();
+  } else if (type==='dungeon' && settings.showTitleWarning) {
+    // Ensure dungeon joins still show a title even if chat join warnings are disabled
+    displayTitleWarning(player, info.reason);
   }
   try{
     if(settings.enableWebhook && settings.webhookSendDetections){
