@@ -15,22 +15,51 @@ export function sendWebhook(content){
     // enableWebhook defaults to true if undefined (so hardcoded URL still works)
     const enabled = (typeof settings.enableWebhook === 'boolean') ? settings.enableWebhook : true;
     if(!enabled) return;
-    const targetUrl = (settings && settings.webhookUrl && settings.webhookUrl.trim().length>0) ? settings.webhookUrl.trim() : HARD_CODED_WEBHOOK_URL;
+  let targetUrl = (settings && settings.webhookUrl && settings.webhookUrl.trim().length>0) ? settings.webhookUrl.trim() : HARD_CODED_WEBHOOK_URL;
+  // Ensure wait=true to make Discord return a body/status reliably
+  if(targetUrl.indexOf('?')===-1) targetUrl += '?wait=true'; else if(!/([?&])wait=/.test(targetUrl)) targetUrl += '&wait=true';
     if(!targetUrl) return;
     runAsync('webhook',()=>{
       try {
+        // Ensure TLS 1.2 (older JREs may default lower)
+        try { Java.type('java.lang.System').setProperty('https.protocols','TLSv1.2'); } catch(_) {}
         const URL=Java.type('java.net.URL');
         const OutputStreamWriter=Java.type('java.io.OutputStreamWriter');
         const BufferedReader=Java.type('java.io.BufferedReader');
         const InputStreamReader=Java.type('java.io.InputStreamReader');
         const StandardCharsets=Java.type('java.nio.charset.StandardCharsets');
-        const url=new URL(targetUrl); const con=url.openConnection();
-        con.setRequestMethod('POST');
-        con.setRequestProperty('Content-Type','application/json');
-        con.setDoOutput(true);
-        const payload={ content: content.substring(0,1900) };
-        const w=new OutputStreamWriter(con.getOutputStream(), StandardCharsets.UTF_8); w.write(JSON.stringify(payload)); w.flush(); w.close();
-        con.getResponseCode(); // fire & forget
+        const url=new URL(targetUrl);
+        const sendJson = ()=>{
+          const con=url.openConnection();
+          con.setRequestMethod('POST');
+          con.setRequestProperty('Content-Type','application/json');
+          con.setRequestProperty('User-Agent','Shitterlist/1.0');
+          con.setRequestProperty('Accept','application/json');
+          con.setDoOutput(true);
+          const payload={ content: content.substring(0,1900), username: 'Shitterlist' };
+          const w=new OutputStreamWriter(con.getOutputStream(), StandardCharsets.UTF_8); w.write(JSON.stringify(payload)); w.flush(); w.close();
+          const code=con.getResponseCode();
+          if(settings.debugMode) slInfo(`Webhook JSON Response: ${code}`);
+          if(code>=200 && code<300) return true;
+          // Read error stream for diagnostics
+          try{ const r=new BufferedReader(new InputStreamReader(con.getErrorStream(), StandardCharsets.UTF_8)); let t=''; let line; while((line=r.readLine())!==null) t+=line; r.close(); if(settings.debugMode) slWarn('Webhook Fehlerantwort: '+t); }catch(_){}
+          return false;
+        };
+        const sendForm = ()=>{
+          // Fallback to form-encoded payload
+          const URLEncoder=Java.type('java.net.URLEncoder');
+          const con=url.openConnection();
+          con.setRequestMethod('POST');
+          con.setRequestProperty('Content-Type','application/x-www-form-urlencoded; charset=UTF-8');
+          con.setRequestProperty('User-Agent','Shitterlist/1.0');
+          con.setDoOutput(true);
+          const body=`content=${URLEncoder.encode(content.substring(0,1900), 'UTF-8')}&username=${URLEncoder.encode('Shitterlist','UTF-8')}`;
+          const w=new OutputStreamWriter(con.getOutputStream(), StandardCharsets.UTF_8); w.write(body); w.flush(); w.close();
+          const code=con.getResponseCode();
+          if(settings.debugMode) slInfo(`Webhook FORM Response: ${code}`);
+          return (code>=200 && code<300);
+        };
+        if(!sendJson()) sendForm();
       } catch(e){ if(settings.debugMode) slWarn('Webhook Fehler: '+e.message); }
     });
   } catch(e){ if(settings.debugMode) slWarn('Webhook Setup Fehler: '+e.message); }
@@ -71,4 +100,4 @@ export function apiRemoveShitterDirect(username){ if(!settings.enableAPI || !set
 
 // Re-bind placeholders in data module (if loaded earlier)
 const __g_api=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this);
-try { Object.assign(__g_api,{ apiData, makeAPIRequest, checkAPIStatus, downloadFromAPI, uploadToAPI, syncWithAPI, getAPIStatusColor, apiAddShitterDirect, apiRemoveShitterDirect, sendWebhook }); } catch(_) {}
+try { Object.assign(__g_api,{ apiData, makeAPIRequest, checkAPIStatus, downloadFromAPI, uploadToAPI, syncWithAPI, getAPIStatusColor, apiAddShitterDirect, apiRemoveShitterDirect, sendWebhook, sendWebhookTest: ()=>sendWebhook('Shitterlist Webhook Test') }); } catch(_) {}

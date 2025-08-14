@@ -6,6 +6,7 @@ import { sendWebhook } from './api';
 import { displayTitleWarning, playCustomJoinSound } from './visual';
 
 const autoKickSent={};
+const detectedRecently={};
 let partyLeader=null, partyInfoPending=false, partyInfoLastUpdate=0, partyInfoCallbacks=[];
 let suppressPartyListOutput=false, partyListSuppressExpire=0;
 
@@ -16,10 +17,12 @@ export function ensurePartyLeader(cb){
   if(partyLeader && (now-partyInfoLastUpdate)<10000) return cb&&cb(partyLeader);
   partyInfoCallbacks.push(cb);
   if(partyInfoPending) return;
-  partyInfoPending=true; beginPartyListSuppression(2000);
+  partyInfoPending=true; beginPartyListSuppression(4000);
   if(settings.debugMode) ChatLib.chat('&7[DEBUG] /p list für Leader');
   safeCommand('p list');
-  setTimeout(()=>{ if(partyInfoPending){ partyInfoPending=false; suppressPartyListOutput=false; if(settings.debugMode) ChatLib.chat('&7[DEBUG] Leader Timeout'); const cbs=partyInfoCallbacks.slice(); partyInfoCallbacks=[]; cbs.forEach(f=>f(partyLeader)); } },1600);
+  // Retry once shortly after in case the first call is dropped or slow
+  setTimeout(()=>{ if(partyInfoPending){ safeCommand('p list'); if(settings.debugMode) ChatLib.chat('&7[DEBUG] /p list retry'); } }, 900);
+  setTimeout(()=>{ if(partyInfoPending){ partyInfoPending=false; suppressPartyListOutput=false; if(settings.debugMode) ChatLib.chat('&7[DEBUG] Leader Timeout'); const cbs=partyInfoCallbacks.slice(); partyInfoCallbacks=[]; cbs.forEach(f=>f(partyLeader)); } },3000);
 }
 
 export function attemptAutoKick(playerName, reason, joinType){
@@ -38,6 +41,27 @@ export function attemptAutoKick(playerName, reason, joinType){
 
 function shouldShowWarning(){ return settings.showJoinWarnings; }
 
+function processDetection(player, type){
+  const key=player.toLowerCase();
+  const now=Date.now();
+  if(detectedRecently[key] && now-detectedRecently[key]<4000) return; // debounce
+  detectedRecently[key]=now;
+  const list=getActivePlayerList();
+  const info=list.find(p=>p.name.toLowerCase()===player.toLowerCase()) || { reason: 'Unknown' };
+  attemptAutoKick(player, info.reason, type);
+  if(shouldShowWarning()){
+    ChatLib.chat(`&c[Shitterlist] &f${player} &7(${info.reason})`);
+    displayTitleWarning(player, info.reason);
+    playCustomJoinSound();
+  }
+  try{
+    if(settings.enableWebhook && settings.webhookSendDetections){
+      const kind = type==='dungeon' ? 'Dungeon' : 'Party';
+      sendWebhook(`🚨 ${kind} Detection: **${player}** (${info.reason||'Unknown'})`);
+    }
+  }catch(_){}
+}
+
 // /p list output parsing & suppression
 register('chat',(rawLine,event)=>{
   if(suppressPartyListOutput && Date.now()>partyListSuppressExpire) suppressPartyListOutput=false;
@@ -55,30 +79,22 @@ register('chat',(msg)=>{
   // Normalize color codes
   const plain = msg.replace(/§[0-9a-fk-or]/g,'');
   // Match various party join formats (with rank, no rank, Party > prefix)
-  const partyJoin=plain.match(/^(?:Party > )?(?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16}) joined the party\.$/);
+  const partyJoin=plain.match(/^(?:Party > )?(?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16}) (?:has )?joined the party[.!]$/);
   if(partyJoin && settings.partyWarnings){ type='party'; player=partyJoin[1]; }
-  if(!type && plain.includes('joined the dungeon group!') && settings.dungeonWarnings){ const d=plain.match(/^(?:Party Finder > )?(.+?) joined the dungeon group!/); if(d){ player=d[1].trim(); type='dungeon'; } }
+  if(!type && plain.toLowerCase().includes('joined the dungeon group') && settings.dungeonWarnings){
+    const d=plain.match(/^(?:Party Finder > )?(?:\[[^\]]+\]\s*)?(.+?) (?:has )?joined the dungeon group!$/);
+    if(d){ player=d[1].trim(); type='dungeon'; }
+  }
   if(!player) return;
   if(player.toLowerCase()===Player.getName().toLowerCase()) return;
   // Trigger cache load if needed in API_ONLY mode via data.isShitter side-effect
   const isShit = dataIsShitter(player);
-  if(!isShit) return;
-  const list=getActivePlayerList();
-  const info=list.find(p=>p.name.toLowerCase()===player.toLowerCase());
-  attemptAutoKick(player, info.reason, type);
-  if(shouldShowWarning()){
-    ChatLib.chat(`&c[Shitterlist] &f${player} &7(${info.reason})`);
-    displayTitleWarning(player, info.reason);
-    playCustomJoinSound();
+  if(isShit){
+    processDetection(player, type);
+  } else if (settings.enableAPI) {
+    // Re-check shortly after in case API cache had to be fetched lazily
+    setTimeout(()=>{ if(dataIsShitter(player)) processDetection(player, type); }, 1500);
   }
-  // Optional webhook notification for detections
-  try{
-    if(settings.enableWebhook && settings.webhookSendDetections){
-      const reasonTxt = info && info.reason ? info.reason : 'Unknown';
-      const kind = type==='dungeon' ? 'Dungeon' : 'Party';
-      sendWebhook(`🚨 ${kind} Detection: **${player}** (${reasonTxt})`);
-    }
-  }catch(_){}
 }).setCriteria('${msg}');
 
 const __g_party=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this);
