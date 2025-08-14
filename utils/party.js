@@ -35,10 +35,19 @@ export function ensurePartyLeader(cb){
 function resolveLeaderOnce(cb){
   const now=Date.now();
   if(partyLeader && (now-partyInfoLastUpdate)<10000){ cb&&cb(partyLeader); return; }
-  partyInfoPending=true; beginPartyListSuppression(1800);
+  // Use the same callback mechanism as ensurePartyLeader but with a single /p list fire
+  partyInfoCallbacks.push(cb);
+  if(partyInfoPending) return; // already resolving elsewhere
+  partyInfoPending=true; beginPartyListSuppression(3000);
   if(settings.debugMode) ChatLib.chat('&7[DEBUG] /p list (single)');
   sendCommandNow('p list');
-  setTimeout(()=>{ partyInfoPending=false; suppressPartyListOutput=false; cb&&cb(partyLeader); }, 700);
+  // Fallback finalize after ~3s in case no leader line arrives
+  setTimeout(()=>{
+    if(partyInfoPending){
+      partyInfoPending=false; suppressPartyListOutput=false;
+      const cbs=partyInfoCallbacks.slice(); partyInfoCallbacks=[]; cbs.forEach(f=>f(partyLeader));
+    }
+  }, 3000);
 }
 
 export function attemptAutoKick(playerName, reason, joinType){
@@ -57,7 +66,7 @@ export function attemptAutoKick(playerName, reason, joinType){
     if(!partyActive){ finalize(); return; }
     if(!leader || leader.toLowerCase()!==meL){ finalize(); return; }
     autoKickSent[key]=Date.now();
-    safeCommand(`pchat Kicking ${playerName} - Reason: ${reason||'Unknown'}`);
+  safeCommand(`pc Kicking ${playerName} - Reason: ${reason||'Unknown'}`);
     setTimeout(()=>{ if(partyActive && !recentlyRemoved[key]) safeCommand(`p kick ${playerName}`); finalize(); }, 900);
   });
 }
@@ -91,7 +100,7 @@ register('chat',(rawLine,event)=>{
   const line=rawLine.replace(/§./g,'').trim();
   // Recognize direct listings (from /p list)
   const leaderMatch=line.match(/^Party (?:Leader|Owner):\s+(?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16})\b/);
-  if(leaderMatch){ setPartyLeader(leaderMatch[1]); partyInfoPending=false; suppressPartyListOutput=false; const cbs=partyInfoCallbacks.slice(); partyInfoCallbacks=[]; cbs.forEach(f=>f(partyLeader)); }
+  if(leaderMatch){ partyActive=true; setPartyLeader(leaderMatch[1]); partyInfoPending=false; suppressPartyListOutput=false; const cbs=partyInfoCallbacks.slice(); partyInfoCallbacks=[]; cbs.forEach(f=>f(partyLeader)); }
   // Recognize messages making you leader
   if(/^You are now the party leader\.?$/i.test(line) || /^Du bist jetzt der Partyleiter\.?$/i.test(line)){ setPartyLeader(Player.getName()); }
   // Recognize transfer/promote messages: "promoted X to Party Leader" or "transferred the leadership to X"
@@ -113,6 +122,9 @@ register('chat',(rawLine,event)=>{
     partyActive=false;
   }
   if(/^You have joined \[.*?\] .*?'s party\.?$/.test(line) || /^You have created a party\.?$/.test(line)){
+    partyActive=true;
+  }
+  if(/^(Party Moderators?: |Party Members?: )/.test(line)){
     partyActive=true;
   }
   if(suppressPartyListOutput){ if(/^(Party (?:Leader|Owner): |Party Moderators?: |Party Members?: |Party Finder Queue: |You are not in a party\.)/.test(line)){ cancel(event); } }
