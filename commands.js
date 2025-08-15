@@ -13,6 +13,9 @@ function addShitterWithCategory(username, category, reason){
   const full = categories[category]? `${categories[category]}: ${reason}` : `${category}: ${reason}`; return addShitter(username, full);
 }
 
+// Cache the last known reason for removed players to support "silent re-add"
+const lastRemovedReasons = {};
+
 register('command', (...args)=>{
   if(!args || args.length===0){
     slLog('general','Befehle:','info');
@@ -69,11 +72,27 @@ register('command', (...args)=>{
 
       const header = `&b[Shitterlist] &fShitter (&e${list.length}&f) &7Seite &e${page}&7/&e${totalPages}`;
       const start=(page-1)*pageSize;
-      const rows = list.slice(start,start+pageSize).map(pl=>`&c#${pl.id||'?'} &f${pl.name} &7- ${pl.reason||'Keine Angabe'}`);
+      const pageItems = list.slice(start,start+pageSize);
 
-      // Compose the main block (header + items)
-      const mainBlock = new TextComponent([header, ...rows].join('\n'));
-      const msg = new Message(mainBlock);
+      // Compose message with clickable names that run /pv <name>
+      const msg = new Message(new TextComponent(header));
+      pageItems.forEach(pl => {
+        const id = pl.id || '?';
+        // Newline + clickable ID (#id) to remove entry
+        const idBtn = new TextComponent(`\n&c#${id}`)
+          .setHover('show_text', `&cEintrag entfernen? Bestätigung folgt.\n&7Klick: /sl confirmremove ${pl.name}`)
+          .setClick('run_command', `/sl confirmremove ${pl.name}`);
+        msg.addTextComponent(idBtn);
+        // Space + white name label
+        msg.addTextComponent(new TextComponent(' &f'));
+        // Clickable player name -> /pv <name>
+        const nameBtn = new TextComponent(pl.name)
+          .setHover('show_text', `&eKlicken zum Öffnen: /pv ${pl.name}`)
+          .setClick('run_command', `/pv ${pl.name}`);
+        msg.addTextComponent(nameBtn);
+        // Suffix with reason
+        msg.addTextComponent(new TextComponent(` &7- ${pl.reason||'Keine Angabe'}`));
+      });
 
       // Navigation (hover + click) appended to the same message so the whole block shares one ID
       if(totalPages>1){
@@ -96,10 +115,57 @@ register('command', (...args)=>{
         } catch(e){ if(settings.debugMode) ChatLib.chat('&7[DEBUG] Nav Error: '+e.message); }
       }
 
-      msg.setChatLineId(LIST_CHAT_ID);
+  msg.setChatLineId(LIST_CHAT_ID);
       ChatLib.chat(msg);
       break;
     }
+    case 'confirmremove': {
+      if(args.length<2){ ChatLib.chat('&c[Shitterlist] &fUsage: /sl confirmremove <username>'); return; }
+      const name=args[1];
+      const entry = getActivePlayerList().find(p=>p.name.toLowerCase()===name.toLowerCase());
+      if(!entry){ ChatLib.chat(`&c[Shitterlist] &f${name} nicht gefunden.`); return; }
+      const m = new Message('&c[Shitterlist] &fWirklich entfernen: ', new TextComponent(`&c${entry.name}`).setHover('show_text', `&7Grund: &f${entry.reason||'Keine Angabe'}`));
+      m.addTextComponent(new TextComponent('  '));
+      m.addTextComponent(new TextComponent('&a[Ja, entfernen]')
+        .setHover('show_text', `&cEntfernen: ${entry.name}`)
+        .setClick('run_command', `/sl doremove ${entry.name}`));
+      m.addTextComponent(new TextComponent(' '));
+      m.addTextComponent(new TextComponent('&7[Abbrechen]')
+        .setHover('show_text', '&7Abbruch, keine Aktion')
+        .setClick('run_command', `/sl canceled`));
+      ChatLib.chat(m);
+      break;
+    }
+    case 'doremove': {
+      if(args.length<2){ ChatLib.chat('&c[Shitterlist] &fUsage: /sl doremove <username>'); return; }
+      const name=args[1];
+      const lower=name.toLowerCase();
+      const entry = getActivePlayerList().find(p=>p.name.toLowerCase()===lower);
+      if(!entry){ ChatLib.chat(`&c[Shitterlist] &f${name} nicht gefunden.`); return; }
+      // Remember reason for silent re-add
+      lastRemovedReasons[lower] = entry.reason || 'Keine Angabe';
+      const ok = removeShitter(name);
+      if(ok){
+        const back = new Message(`&a[Shitterlist] &fEntfernt: &c${name}&f. `);
+        back.addTextComponent(new TextComponent('&e[Wieder hinzufügen]')
+          .setHover('show_text', `&7Gleicher Grund: &f${lastRemovedReasons[lower]}`)
+          .setClick('run_command', `/sl readdsilently ${name}`));
+        ChatLib.chat(back);
+      }
+      break;
+    }
+    case 'readdsilently': {
+      if(args.length<2){ ChatLib.chat('&c[Shitterlist] &fUsage: /sl readdsilently <username>'); return; }
+      const name=args[1];
+      const lower=name.toLowerCase();
+      const reason = lastRemovedReasons[lower] || 'Keine Angabe';
+      // Temporarily suppress "add" webhook (affects API_ONLY path)
+      const prev = settings.webhookSendAdds;
+      try { settings.webhookSendAdds = false; addShitter(name, reason); } finally { settings.webhookSendAdds = prev; }
+      ChatLib.chat(`&a[Shitterlist] &fWieder hinzugefügt: &c${name} &7(${reason})`);
+      break;
+    }
+    case 'canceled': { ChatLib.chat('&7[Shitterlist] &fAktion abgebrochen.'); break; }
     case 'search': if(args.length<2){ ChatLib.chat('&c[Shitterlist] &fUsage: /sl search <term>'); return;} { const term=args.slice(1).join(' '); const matches=getActivePlayerList().filter(p=>p.name.toLowerCase().includes(term.toLowerCase())|| (p.reason||'').toLowerCase().includes(term.toLowerCase())); if(!matches.length){ ChatLib.chat(`&c[Shitterlist] &fKeine Treffer für "${term}"`); return;} ChatLib.chat(`&a[Shitterlist] &fSuchergebnisse (${matches.length}):`); matches.forEach(p=>ChatLib.chat(`&c• ${p.name} &7(${p.reason})`)); } break;
     case 'random': getRandomShitter(); break;
     case 'stats': getShitterStats(); break;

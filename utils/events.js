@@ -11,8 +11,7 @@ function isShitter(name){ return getActivePlayerList().some(p=>p.name.toLowerCas
 // Chat filter for standard chat pattern
 register('chat',(username,message,event)=>{ if(!settings.enabled || !settings.chatFilter) return; const clean=username.replace(/§[0-9a-fk-or]/g,''); if(isShitter(clean)){ cancel(event); if(settings.debugMode) ChatLib.chat(`&c[Shitterlist] &7Nachricht von ${clean} gefiltert`); } }).setCriteria('${username}: ${message}');
 
-// Party / Dungeon join detection (delegated to party module for kicking)
-register('chat',(message)=>{ if(!settings.enabled) return; let type=null, player=null; const partyJoin=message.match(/^(?:Party > )?(?:\[[^\]]+\]\s*)?([A-Za-z0-9_]{1,16}) joined the party\.$/); if(partyJoin && settings.partyWarnings){ type='party'; player=partyJoin[1]; } if(!type && message.includes('joined the dungeon group!') && settings.dungeonWarnings){ const d=message.match(/^(.+?) joined the dungeon group!/); if(d){ type='dungeon'; player=d[1].replace(/^Party Finder > /,'').trim(); } } if(!player) return; if(player.toLowerCase()===Player.getName().toLowerCase()) return; if(isShitter(player)){ const info=getActivePlayerList().find(p=>p.name.toLowerCase()===player.toLowerCase()); const reason=info?(info.reason||'Unknown'):'Unknown'; attemptAutoKick(player, reason, type); } }).setCriteria('${message}');
+// Party/Dungeon join detection is handled exclusively in utils/party.js to avoid duplicates.
 
 // Cooldown cleanup (warning cooldowns map)
 let lastCooldownCleanup=0;

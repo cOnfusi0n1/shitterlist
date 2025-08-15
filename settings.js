@@ -76,6 +76,8 @@ class Settings {
 	webhookSendDetections = true;
 	@TextProperty({ name: "Webhook URL (Override)", description: "Leer lassen um die eingebaute URL zu nutzen", category: "Webhook", placeholder: "https://discord.com/api/webhooks/..." })
 	webhookUrl = "";
+	@SliderProperty({ name: "Auto-Remove Test (Minuten)", description: "Einträge mit Grund, der 'Test' enthält, automatisch nach X Minuten entfernen (0=aus)", category: "Advanced", min: 0, max: 180 })
+	testAutoRemoveMinutes = 1;
 	@ButtonProperty({ name: "Webhook Test", description: "Sendet eine Testnachricht", category: "Webhook" })
 	webhookTest(){ try{ if(typeof sendWebhookTest==='function') sendWebhookTest(); else if(typeof sendWebhook==='function') sendWebhook('Shitterlist Webhook Test'); }catch(_){} }
 	@SwitchProperty({ name: "Von API laden", description: "Daten herunterladen", category: "API" })

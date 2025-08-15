@@ -19,20 +19,7 @@ export function playCustomJoinSound() {
   try { World.playSound(evt, vol, pitch); } catch (e) { if (settings.debugMode) slInfo('CustomSound Fehler: ' + e.message); }
 }
 
-// Title warning with cooldown
-let lastTitleAt = 0;
-export function displayTitleWarning(playerName, reason) {
-  if (!reason || !reason.trim()) reason = 'Unknown';
-  if (!settings.showTitleWarning) { if (settings.debugMode) ChatLib.chat('&7[DEBUG] Title übersprungen (Einstellung aus)'); return; }
-  const now = Date.now();
-  if (settings.warningCooldown && now - lastTitleAt < settings.warningCooldown * 1000) return;
-  lastTitleAt = now;
-  const rawTitle = '&c⚠ SHITTER DETECTED ⚠';
-  const rawSubtitle = `&f${playerName} &7(${reason})`;
-  const title = rawTitle.replace(/&/g, '§');
-  const subtitle = rawSubtitle.replace(/&/g, '§');
-  try { Client.showTitle(title, subtitle, 10, 80, 20); if (settings.debugMode) ChatLib.chat(`&7[DEBUG] Title gezeigt für &f${playerName}`); } catch (e) { slInfo('Title Fehler: ' + e.message); }
-}
+// (Title now handled locally in party.js)
 
 const __g_visual=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this);
-try { Object.assign(__g_visual, { displayTitleWarning, playCustomJoinSound, playNotificationSound }); } catch(_) {}
+try { Object.assign(__g_visual, { playCustomJoinSound, playNotificationSound }); } catch(_) {}
