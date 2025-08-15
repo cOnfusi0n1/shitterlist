@@ -31,12 +31,12 @@ function normName(n){ return settings.caseSensitive ? n : n.toLowerCase(); }
 export function apiAddShitterDirect(){ return null; }
 export function apiRemoveShitterDirect(){ return false; }
 
-export function addShitter(username, reason='Manual'){
+export function addShitter(username, reason='Manual', floor){
   if(!username) return null;
   if(API_ONLY){
     const __g=(typeof globalThis!=='undefined')?globalThis:(typeof global!=='undefined'?global:this);
     const fn=__g.apiAddShitterDirect||apiAddShitterDirect; // fallback to placeholder
-    const res=fn(username, reason);
+  const res=fn(username, reason, floor);
     if(!res) {
       slWarn(`API Add fehlgeschlagen oder bereits vorhanden: ${username}`);
       return res;
@@ -57,9 +57,15 @@ export function addShitter(username, reason='Manual'){
   }
   const cleaned = cleanPlayerName(username);
   const existing = shitterData.players.find(p=>normName(p.name)===normName(cleaned));
-  if(existing){ if(reason && reason!==existing.reason){ existing.reason=reason; existing.updatedAt=Date.now(); saveData(); slSuccess(`Aktualisiert: ${cleaned}`);} return existing; }
+  if(existing){
+    let changed=false;
+    if(reason && reason!==existing.reason){ existing.reason=reason; changed=true; }
+    if(floor && floor!==existing.floor){ existing.floor=floor; changed=true; }
+    if(changed){ existing.updatedAt=Date.now(); saveData(); slSuccess(`Aktualisiert: ${cleaned}`);} else { slInfo(`Unverändert: ${cleaned}`); }
+    return existing;
+  }
   if(shitterData.players.length >= settings.maxListSize){ slWarn('Maximale Listengröße erreicht'); return null; }
-  const entry={ id:Math.random().toString(36).substring(2,11), name:cleaned, reason, severity:1, category:'manual', source:'local', dateAdded:Date.now(), updatedAt:Date.now() };
+  const entry={ id:Math.random().toString(36).substring(2,11), name:cleaned, reason, floor, severity:1, category:'general', source:'local', dateAdded:Date.now(), updatedAt:Date.now() };
   shitterData.players.push(entry); saveData(); slSuccess(`Hinzugefügt: ${cleaned}`);
   try {
     const mins = (settings && typeof settings.testAutoRemoveMinutes==='number') ? settings.testAutoRemoveMinutes|0 : 0;

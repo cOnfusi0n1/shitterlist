@@ -19,7 +19,7 @@ const lastRemovedReasons = {};
 register('command', (...args)=>{
   if(!args || args.length===0){
     slLog('general','Befehle:','info');
-    ChatLib.chat('&e/sl add <name> [reason] &7- Spieler hinzufügen');
+  ChatLib.chat('&e/sl add <name> <grund> <floor> &7- Spieler hinzufügen');
     ChatLib.chat('&e/sl remove <name> &7- Spieler entfernen');
     ChatLib.chat('&e/sl check <name> &7- Status prüfen');
     ChatLib.chat('&e/sl list &7- Liste anzeigen');
@@ -49,9 +49,16 @@ register('command', (...args)=>{
   const sub = args[0].toLowerCase();
   switch(sub){
     case 'add':{
-      if(args.length<3){ ChatLib.chat('&c[Shitterlist] &fUsage: /sl add <username> <Grund>'); return; }
-      const reason=args.slice(2).join(' ').trim(); if(!reason){ ChatLib.chat('&c[Shitterlist] &fGrund darf nicht leer sein!'); return; }
-      addShitter(args[1], reason);
+      if(args.length<4){ ChatLib.chat('&c[Shitterlist] &fUsage: /sl add <username> <Grund> <Floor>'); return; }
+      const name = args[1];
+      let floor = args[args.length-1];
+      const reason = args.slice(2, args.length-1).join(' ').trim();
+      if(!reason){ ChatLib.chat('&c[Shitterlist] &fGrund darf nicht leer sein!'); return; }
+  // Normalize and validate floor token (F1-F7 or M1-M7)
+  if(!floor || /\s/.test(floor)) { ChatLib.chat('&c[Shitterlist] &fErlaubte Floors: &eF1 F2 F3 F4 F5 F6 F7 &7oder &eM1 M2 M3 M4 M5 M6 M7'); return; }
+  floor = String(floor).toUpperCase();
+  if(!/^([FM][1-7])$/.test(floor)) { ChatLib.chat('&c[Shitterlist] &fErlaubte Floors: &eF1 F2 F3 F4 F5 F6 F7 &7oder &eM1 M2 M3 M4 M5 M6 M7'); return; }
+      addShitter(name, reason, floor);
       break; }
     case 'remove': if(args.length<2){ ChatLib.chat('&c[Shitterlist] &fUsage: /sl remove <username>'); return; } removeShitter(args[1]); break;
     case 'check': if(args.length<2){ ChatLib.chat('&c[Shitterlist] &fUsage: /sl check <username>'); return;} const info=getActivePlayerList().find(p=>p.name.toLowerCase()===args[1].toLowerCase()); if(info){ ChatLib.chat(`&c[Shitterlist] &f${args[1]} ist ein Shitter`); ChatLib.chat(`&7Grund: &c${info.reason||'Unknown'}`);} else ChatLib.chat(`&a[Shitterlist] &f${args[1]} ist nicht in der Liste`); break;
@@ -90,8 +97,15 @@ register('command', (...args)=>{
           .setHover('show_text', `&eKlicken zum Öffnen: /pv ${pl.name}`)
           .setClick('run_command', `/pv ${pl.name}`);
         msg.addTextComponent(nameBtn);
-        // Suffix with reason
-        msg.addTextComponent(new TextComponent(` &7- ${pl.reason||'Keine Angabe'}`));
+        // Determine floor for display: use field or parse trailing [Fx] from reason
+        let floorLabel = '';
+        try {
+          if(pl.floor) floorLabel = String(pl.floor);
+          else if(pl.reason){ const m = String(pl.reason).match(/\[(?:F|M)\d+\]$/i); if(m) floorLabel = m[0].replace(/[\[\]]/g,''); }
+        } catch(_) {}
+        // Suffix with reason (+ optional floor)
+        const suffix = floorLabel ? ` &7- ${pl.reason||'Keine Angabe'} &8[${floorLabel}]` : ` &7- ${pl.reason||'Keine Angabe'}`;
+        msg.addTextComponent(new TextComponent(suffix));
       });
 
       // Navigation (hover + click) appended to the same message so the whole block shares one ID
@@ -174,7 +188,7 @@ register('command', (...args)=>{
     case 'quick': if(args.length<3){ ChatLib.chat('&cUsage: /sl quick <kategorie> <name> [grund]'); return;} addShitterWithCategory(args[2], args[1].toLowerCase(), args.slice(3).join(' ')||'Keine Angabe'); break;
     case 'clear': ChatLib.chat("&c[Shitterlist] &fWirklich alle Einträge löschen? '/sl confirmclear'"); break;
     case 'confirmclear': clearList(); break;
-    case 'players': try { const tab=TabList.getNames(); if(tab&&tab.length){ ChatLib.chat('&a[Shitterlist] &f&lKlickbare Spielerliste:'); const my=Player.getName(); tab.slice(0,20).forEach(n=>{ const cn=cleanPlayerName(n); if(cn!==my && cn.length>0 && !cn.includes('Players')){ const is=isShitter(cn); const comp=new Message(`${is?'&c●':'&a●'} `, new TextComponent(`&f${cn}`).setHover('show_text', is?'&eVON LISTE ENTFERNEN':'&eZUR LISTE HINZUFÜGEN').setClick('run_command', is?`/sl remove ${cn}`:`/sl add ${cn} Manual`)); ChatLib.chat(comp); } }); } else ChatLib.chat('&c[Shitterlist] &fKeine Tab-Liste verfügbar'); } catch(e){ ChatLib.chat('&c[Shitterlist] &fFehler: '+e.message);} break;
+  case 'players': try { const tab=TabList.getNames(); if(tab&&tab.length){ ChatLib.chat('&a[Shitterlist] &f&lKlickbare Spielerliste:'); const my=Player.getName(); tab.slice(0,20).forEach(n=>{ const cn=cleanPlayerName(n); if(cn!==my && cn.length>0 && !cn.includes('Players')){ const is=isShitter(cn); const hover=is?'&eVON LISTE ENTFERNEN':'&eZUR LISTE HINZUFÜGEN (Grund+Floor anpassen)'; const clickType=is?'run_command':'suggest_command'; const clickCmd=is?`/sl remove ${cn}`:`/sl add ${cn} Grund F7`; const comp=new Message(`${is?'&c●':'&a●'} `, new TextComponent(`&f${cn}`).setHover('show_text', hover).setClick(clickType, clickCmd)); ChatLib.chat(comp); } }); } else ChatLib.chat('&c[Shitterlist] &fKeine Tab-Liste verfügbar'); } catch(e){ ChatLib.chat('&c[Shitterlist] &fFehler: '+e.message);} break;
     case 'sync': if(!settings.enableAPI){ ChatLib.chat('&c[Shitterlist] &fAPI ist nicht aktiviert'); return;} showApiSyncMessage('Starte API-Synchronisation...','info'); syncWithAPI(); break;
     case 'upload': if(!settings.enableAPI){ ChatLib.chat('&c[Shitterlist] &fAPI ist nicht aktiviert'); return;} uploadToAPI(()=>{}); break;
     case 'download': if(!settings.enableAPI){ ChatLib.chat('&c[Shitterlist] &fAPI ist nicht aktiviert'); return;} downloadFromAPI(()=>{}); break;
