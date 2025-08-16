@@ -2,7 +2,7 @@
 import { settings } from '../settings';
 import { getActivePlayerList, loadData, saveData, shitterData } from './data';
 import { syncWithAPI, apiData } from './api';
-import { slInfo, withPrefix, THEME } from './core';
+import { slInfo, formatMessage as withPrefix, THEME } from './core';
 import { triggerManualUpdateCheck, startAutoUpdater } from '../updater';
 import { attemptAutoKick } from './party';
 
