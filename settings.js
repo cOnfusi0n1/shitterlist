@@ -1,10 +1,10 @@
 // (Removed TypeScript reference directives not needed in runtime environment)
 
-import { @Vigilant, @SwitchProperty, @SliderProperty, @TextProperty, @ButtonProperty, @CheckboxProperty, Color } from "Vigilance";
+import { Vigilant, SwitchProperty, SliderProperty, TextProperty, ButtonProperty, CheckboxProperty, Color } from "Vigilance";
 
 @Vigilant("Shitterlist", "Shitterlist Configuration", {
 	getCategoryComparator: () => (a, b) => {
-		const categories = ["General", "Warnings", "Sounds", "API", "Webhook", "Updater", "Advanced"];
+		const categories = ["General", "Theme", "Warnings", "Sounds", "API", "Webhook", "Updater", "Advanced"];
 		return categories.indexOf(a.name) - categories.indexOf(b.name);
 	}
 })
@@ -19,6 +19,26 @@ class Settings {
 	showTimestamps = false;
 	@SwitchProperty({ name: "Kompakte Nachrichten", description: "Verkürzt Chat-Nachrichten", category: "General" })
 	compactMessages = false;
+
+	// Theme
+	@TextProperty({ name: "Klammern-Farbe", description: "Farbe für die eckigen Klammern [ ] (z.B. &6)", category: "Theme", placeholder: "&6" })
+	themeBracketColor = "&6";
+	@TextProperty({ name: "Brand-Farbe", description: "Farbe für den Namen 'Shitterlist' im Prefix (z.B. &d)", category: "Theme", placeholder: "&d" })
+	themeBrandColor = "&d";
+	@TextProperty({ name: "Trenner/Secondary", description: "Farbe für Sekundärtexte/Trenner (z.B. &7)", category: "Theme", placeholder: "&7" })
+	themeSepColor = "&7";
+	@TextProperty({ name: "Info-Farbe", description: "Farbe für Info-Nachrichten (z.B. &b)", category: "Theme", placeholder: "&b" })
+	themeInfoColor = "&b";
+	@TextProperty({ name: "Erfolg-Farbe", description: "Farbe für Erfolgsnachrichten (z.B. &a)", category: "Theme", placeholder: "&a" })
+	themeSuccessColor = "&a";
+	@TextProperty({ name: "Warn-/Fehler-Farbe", description: "Farbe für Warnungen/Fehler (z.B. &c)", category: "Theme", placeholder: "&c" })
+	themeWarningColor = "&c";
+	@TextProperty({ name: "Header-Farbe", description: "Farbe für Überschriften (z.B. &9)", category: "Theme", placeholder: "&9" })
+	themeHeaderColor = "&9";
+	@TextProperty({ name: "Akzent-Farbe", description: "Farbe für Highlights/Akzente (z.B. &e)", category: "Theme", placeholder: "&e" })
+	themeAccentColor = "&e";
+	@TextProperty({ name: "Abgeblendet/DIM", description: "Farbe für abgeblendete Texte (z.B. &7)", category: "Theme", placeholder: "&7" })
+	themeDimColor = "&7";
 	@SliderProperty({ name: "Maximale Listengröße", description: "Maximale Anzahl von Spielern in der Liste", category: "General", min: 50, max: 2000 })
 	maxListSize = 500;
 	@SwitchProperty({ name: "Join Warnungen", description: "Warnt wenn ein Shitter dem Server beitritt", category: "Warnings" })

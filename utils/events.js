@@ -2,14 +2,14 @@
 import { settings } from '../settings';
 import { getActivePlayerList, loadData, saveData, shitterData } from './data';
 import { syncWithAPI, apiData } from './api';
-import { slInfo } from './core';
+import { slInfo, withPrefix, THEME } from './core';
 import { triggerManualUpdateCheck, startAutoUpdater } from '../updater';
 import { attemptAutoKick } from './party';
 
 function isShitter(name){ return getActivePlayerList().some(p=>p.name.toLowerCase()===name.toLowerCase()); }
 
 // Chat filter for standard chat pattern
-register('chat',(username,message,event)=>{ if(!settings.enabled || !settings.chatFilter) return; const clean=username.replace(/§[0-9a-fk-or]/g,''); if(isShitter(clean)){ cancel(event); if(settings.debugMode) ChatLib.chat(`&c[Shitterlist] &7Nachricht von ${clean} gefiltert`); } }).setCriteria('${username}: ${message}');
+register('chat',(username,message,event)=>{ if(!settings.enabled || !settings.chatFilter) return; const clean=username.replace(/§[0-9a-fk-or]/g,''); if(isShitter(clean)){ cancel(event); if(settings.debugMode) ChatLib.chat(withPrefix(`Nachricht von ${clean} gefiltert`,'warning')); } }).setCriteria('${username}: ${message}');
 
 // Party/Dungeon join detection is handled exclusively in utils/party.js to avoid duplicates.
 
@@ -25,4 +25,4 @@ loadData();
 setTimeout(()=>{ if(settings.enableAPI && settings.autoSync) startAutoSync(); if(settings.checkUpdatesOnLoad) triggerManualUpdateCheck(); startAutoUpdater(); },3000);
 
 // Save on unload
-register('gameUnload',()=>{ saveData(); if(settings.debugMode) ChatLib.chat('&a[Shitterlist] &7Daten gespeichert'); });
+register('gameUnload',()=>{ saveData(); if(settings.debugMode) ChatLib.chat(withPrefix('Daten gespeichert','success')); });

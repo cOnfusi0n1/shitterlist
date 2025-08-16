@@ -4,14 +4,40 @@ import { settings } from '../settings';
 
 // ========= Logging =========
 function ts(){ return settings.showTimestamps ? `&7[${new Date().toLocaleTimeString()}] ` : ''; }
-function prefix(){ return settings.showPrefix ? '&c[Shitterlist] ' : ''; }
+// Centralized theme/palette for the whole module (driven by settings with fallbacks)
+export const THEME = {
+	get bracket(){ return settings.themeBracketColor || '&6'; },
+	get brand(){ return settings.themeBrandColor || '&d'; },
+	get sep(){ return settings.themeSepColor || '&7'; },
+	get info(){ return settings.themeInfoColor || '&b'; },
+	get success(){ return settings.themeSuccessColor || '&a'; },
+	get warning(){ return settings.themeWarningColor || '&c'; },
+	get header(){ return settings.themeHeaderColor || '&9'; },
+	get accent(){ return settings.themeAccentColor || '&e'; },
+	get dim(){ return settings.themeDimColor || '&7'; }
+};
+
+// Build the colored prefix: [Shitterlist] with new palette
+export function slPrefix(){
+	if(!settings.showPrefix) return '';
+	return `${THEME.bracket}[${THEME.brand}Shitterlist${THEME.bracket}] `;
+}
+
 function normalizeUmlauts(t){ if(!t) return t; return t.replace(/Ã¼/g,'ü').replace(/Ãœ/g,'Ü').replace(/Ã¶/g,'ö').replace(/Ã–/g,'Ö').replace(/Ã¤/g,'ä').replace(/Ã„/g,'Ä').replace(/ÃŸ/g,'ß'); }
-export function formatMessage(msg,type='info'){ let c='&f'; if(type==='warning') c='&c'; else if(type==='success') c='&a'; else if(type==='info') c='&b'; return ts()+prefix()+c+normalizeUmlauts(msg); }
+export function formatMessage(msg,type='info'){
+	const col = THEME[type] || '&f';
+	return ts()+slPrefix()+col+normalizeUmlauts(msg);
+}
+// Quick helper to emit a plain prefixed string (useful when composing Message objects)
+export function withPrefix(text, type='info'){ return formatMessage(text, type); }
 export function slLog(channel,msg,level='info'){ const enabled={general:()=>settings.showGeneralMessages,warning:()=>settings.showWarningMessages,api:()=>settings.showApiSyncMessages,debug:()=>settings.debugMode}; if(!(enabled[channel]||enabled.general)()) return; ChatLib.chat(formatMessage(msg,level)); }
 export const slInfo   = m=>slLog('general',m,'info');
 export const slSuccess= m=>slLog('general',m,'success');
 export const slWarn   = m=>slLog('warning',m,'warning');
 export const showApiSyncMessage=(m,t='info')=>slLog('api',m,t);
+
+// Shared texts
+export const ALLOWED_FLOORS_HELP = 'Erlaubte Floors: &eF1 F2 F3 F4 F5 F6 F7 &7oder &eM1 M2 M3 M4 M5 M6 M7';
 
 // ========= Async (Java Thread wrapper) =========
 let __asyncInit=false, __Thread, __Runnable; export function runAsync(label,fn){ try{ if(!__asyncInit){ __Thread=Java.type('java.lang.Thread'); __Runnable=Java.type('java.lang.Runnable'); __asyncInit=true; } new __Thread(new __Runnable({ run(){ try{ fn(); }catch(e){ if(settings.debugMode) slWarn(`[Async ${label}] ${e}`); } } })).start(); }catch(e){ try{ fn(); }catch(_){} } }
