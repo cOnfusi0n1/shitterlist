@@ -1,13 +1,8 @@
 // (Removed TypeScript reference directives not needed in runtime environment)
 
-import { @Vigilant, @SwitchProperty, @SliderProperty, @TextProperty, @ButtonProperty, @CheckboxProperty, Color } from "Vigilance";
+import { @Vigilant, @SwitchProperty, @SliderProperty, @TextProperty, @ButtonProperty, @CheckboxProperty, @SelectorProperty, Color } from "Vigilance";
 
-@Vigilant("Shitterlist", "Shitterlist Configuration", {
-	getCategoryComparator: () => (a, b) => {
-		const categories = ["General", "Theme", "Warnings", "Sounds", "API", "Webhook", "Updater", "Advanced"];
-		return categories.indexOf(a.name) - categories.indexOf(b.name);
-	}
-})
+@Vigilant("Shitterlist", "Shitterlist Settings", { getCategoryComparator: () => (a, b) => a.localeCompare(b) })
 class Settings {
 	@SwitchProperty({ name: "Aktiviert", description: "Aktiviert oder deaktiviert die Shitterlist komplett", category: "General" })
 	enabled = true;
@@ -19,8 +14,11 @@ class Settings {
 	showTimestamps = false;
 	@SwitchProperty({ name: "Kompakte Nachrichten", description: "Verkürzt Chat-Nachrichten", category: "General" })
 	compactMessages = false;
-
 	// Theme
+	@SelectorProperty({
+		name: "Theme Preset",
+		description: "Wähle ein Farbschema. 'Custom' verwendet die Felder unten.", category: "Theme", options: ["Default", "Ocean", "Ocean", "Gold", "Sunset", "CottonCandy", "Monochrome", "Custom"] })
+	themePreset = 0;
 	@TextProperty({ name: "Klammern-Farbe", description: "Farbe für die eckigen Klammern [ ] (z.B. & 6)", category: "Theme", placeholder: "&6" })
 	themeBracketColor = "&6";
 	@TextProperty({ name: "Brand-Farbe", description: "Farbe für den Namen 'Shitterlist' im Prefix (z.B. & d)", category: "Theme", placeholder: "&d" })

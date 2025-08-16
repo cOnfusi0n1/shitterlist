@@ -4,29 +4,59 @@ import { settings } from '../settings';
 
 // ========= Logging =========
 function ts(){ return settings.showTimestamps ? `&7[${new Date().toLocaleTimeString()}] ` : ''; }
-// Centralized theme/palette for the whole module (driven by settings with fallbacks)
-export const THEME = {
-	get bracket(){ return settings.themeBracketColor || '&6'; },
-	get brand(){ return settings.themeBrandColor || '&d'; },
-	get sep(){ return settings.themeSepColor || '&7'; },
-	get info(){ return settings.themeInfoColor || '&b'; },
-	get success(){ return settings.themeSuccessColor || '&a'; },
-	get warning(){ return settings.themeWarningColor || '&c'; },
-	get header(){ return settings.themeHeaderColor || '&9'; },
-	get accent(){ return settings.themeAccentColor || '&e'; },
-	get dim(){ return settings.themeDimColor || '&7'; }
-};
 
-// Build the colored prefix: [Shitterlist] with new palette
+// Preset-Paletten
+const THEME_PRESETS = [
+    { name: 'Default',     palette: { bracket:'&6', brand:'&d', sep:'&7', info:'&b', success:'&a', warning:'&c', header:'&9', accent:'&e', dim:'&7' } },
+    { name: 'Ocean',       palette: { bracket:'&3', brand:'&b', sep:'&7', info:'&b', success:'&a', warning:'&c', header:'&9', accent:'&3', dim:'&8' } },
+    { name: 'Lime',        palette: { bracket:'&a', brand:'&a', sep:'&7', info:'&a', success:'&a', warning:'&c', header:'&2', accent:'&a', dim:'&8' } },
+    { name: 'Gold',        palette: { bracket:'&6', brand:'&6', sep:'&7', info:'&e', success:'&a', warning:'&c', header:'&6', accent:'&e', dim:'&8' } },
+    { name: 'Sunset',      palette: { bracket:'&6', brand:'&c', sep:'&7', info:'&d', success:'&a', warning:'&c', header:'&5', accent:'&6', dim:'&8' } },
+    { name: 'Dracula',     palette: { bracket:'&8', brand:'&5', sep:'&8', info:'&d', success:'&a', warning:'&c', header:'&5', accent:'&d', dim:'&8' } },
+    { name: 'CottonCandy', palette: { bracket:'&d', brand:'&b', sep:'&7', info:'&b', success:'&a', warning:'&c', header:'&d', accent:'&b', dim:'&8' } },
+    { name: 'Monochrome',  palette: { bracket:'&8', brand:'&7', sep:'&8', info:'&7', success:'&7', warning:'&7', header:'&8', accent:'&7', dim:'&8' } },
+    { name: 'Custom',      palette: null }
+];
+
+function customPalette(){
+    return {
+        bracket: settings.themeBracketColor || '&6',
+        brand:   settings.themeBrandColor   || '&d',
+        sep:     settings.themeSepColor     || '&7',
+        info:    settings.themeInfoColor    || '&b',
+        success: settings.themeSuccessColor || '&a',
+        warning: settings.themeWarningColor || '&c',
+        header:  settings.themeHeaderColor  || '&9',
+        accent:  settings.themeAccentColor  || '&e',
+        dim:     settings.themeDimColor     || '&7'
+    };
+}
+
+function currentPalette(){
+    const idx = (settings.themePreset | 0);
+    const last = THEME_PRESETS.length - 1; // Custom ist letzter Index
+    if (idx >= 0 && idx < last) return THEME_PRESETS[idx].palette;
+    return customPalette();
+}
+
+// Centralized theme/palette (dynamisch)
+export const THEME = new Proxy({}, {
+    get(_t, prop){
+        const p = currentPalette();
+        return p[prop] || '&f';
+    }
+});
+
+// Build the colored prefix
 export function slPrefix(){
-	if(!settings.showPrefix) return '';
-	return `${THEME.bracket}[${THEME.brand}Shitterlist${THEME.bracket}] `;
+    if(!settings.showPrefix) return '';
+    return `${THEME.bracket}[${THEME.brand}Shitterlist${THEME.bracket}] `;
 }
 
 function normalizeUmlauts(t){ if(!t) return t; return t.replace(/Ã¼/g,'ü').replace(/Ãœ/g,'Ü').replace(/Ã¶/g,'ö').replace(/Ã–/g,'Ö').replace(/Ã¤/g,'ä').replace(/Ã„/g,'Ä').replace(/ÃŸ/g,'ß'); }
 export function formatMessage(msg,type='info'){
-	const col = THEME[type] || '&f';
-	return ts()+slPrefix()+col+normalizeUmlauts(msg);
+    const col = THEME[type] || '&f';
+    return ts()+slPrefix()+col+normalizeUmlauts(msg);
 }
 // Quick helper to emit a plain prefixed string (useful when composing Message objects)
 export function withPrefix(text, type='info'){ return formatMessage(text, type); }
